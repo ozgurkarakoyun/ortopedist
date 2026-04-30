@@ -1,41 +1,52 @@
-# WordPress İçerik Migrasyonu Patch'i (v2 — WXR XML desteği)
+# Dil Switcher Düzeltmesi
 
-Bu paket admin paneline iki migrasyon yöntemi ekler:
-1. **WXR XML upload** (önerilen) — WordPress'in resmi export dosyasını yükle
-2. **URL scrape** (yedek) — sitemap+RSS taraması
+## Sorun
 
-## Değişen / yeni dosyalar
+EN/AR butonlarına tıklayınca aynı TR sayfası kalıyordu, çünkü butonlar
+sadece session'a yazıyordu, URL'yi değiştirmiyordu. Türkçe URL ise her
+zaman Türkçe içerik göstermek üzere route edilmiş.
+
+## Çözüm
+
+Dil butonu artık mevcut sayfanın **hedef dildeki karşılığına** yönlendiriyor:
+- `/yazi/foo` üzerinde EN'e tıkla → `/en/post/foo`
+- `/hakkimda` üzerinde EN'e tıkla → `/en/about`
+- `/kategori/x` üzerinde AR'ye tıkla → `/ar/category/x`
+- vb.
+
+## Değişen dosyalar
 
 ```
-services/wxr_importer.py            (YENİ - WXR XML parser)
-routes/admin.py                     (genişletildi - 3 yeni endpoint)
-templates/admin/migrate.html        (sekme yapısı: XML / URL)
-templates/admin/base.html           (sidebar'a "İçerik Aktar" linki)
-templates/admin/dashboard.html      (dashboard'a migrasyon kartı)
+app.py                       (lang_url() helper eklendi)
+templates/base.html          (lang switcher lang_url kullanıyor)
 ```
 
 ## Kurulum
 
 ```bash
 cd /yol/to/ortopedist-blog
-unzip ~/Downloads/migrate-patch.zip -d /tmp/
+unzip ~/Downloads/lang-fix-patch.zip -d /tmp/
+cp /tmp/lang-fix-patch/app.py app.py
+cp /tmp/lang-fix-patch/templates/base.html templates/base.html
 
-cp /tmp/migrate-patch/routes/admin.py routes/admin.py
-cp /tmp/migrate-patch/services/wxr_importer.py services/wxr_importer.py
-cp /tmp/migrate-patch/templates/admin/migrate.html templates/admin/migrate.html
-cp /tmp/migrate-patch/templates/admin/base.html templates/admin/base.html
-cp /tmp/migrate-patch/templates/admin/dashboard.html templates/admin/dashboard.html
-
-git add routes/admin.py services/wxr_importer.py templates/admin/
-git commit -m "feat: WXR XML import + bootstrap admin"
+git add app.py templates/base.html
+git commit -m "fix: dil switcher mevcut sayfanın hedef dildeki URL'sine yönlensin"
 git push
 ```
 
-Railway otomatik redeploy eder (~1-2 dk).
+Railway otomatik redeploy eder.
 
-## Kullanım — WXR Yöntemi (Önerilen)
+## ÖNEMLİ NOT — boş içerik
 
-1. WordPress.com → **Araçlar → Dışa Aktar** → tüm içerik → XML indir
-2. Yeni site → admin → **📥 İçerik Aktar** → **WXR Yükle** sekmesi
-3. XML dosyasını seç → **Yükle ve Aktar**
-4. ~30 saniyede tüm yazılar gelir; her yazının ✅ durumu görünür
+Bu düzeltme sadece **URL**'yi düzeltir. Ama şu an 40 yazının hepsi
+sadece Türkçe'de — EN/AR çevirileri yok. Bu yüzden:
+
+- `/en/` → "No published articles yet" mesajı görünür (boş)
+- `/en/post/foo` → o yazının EN çevirisi yoksa otomatik TR'ye yönlenir
+
+İngilizce/Arapça içerik istiyorsan: admin → yazıyı düzenle →
+"→ English" veya "→ العربية" butonuna bas → AI çevirir →
+onayla → yayında. Toplu çeviri için her yazıya ayrı ayrı yapman
+gerek (40 yazı = 80 çeviri, AI 1-2 saat içinde tamamlar).
+
+İstersen sonradan toplu otomatik çeviri özelliği de ekleyebiliriz.

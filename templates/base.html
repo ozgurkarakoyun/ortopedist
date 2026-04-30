@@ -48,7 +48,7 @@
 
     <div class="lang-switcher">
       {% for code, name in languages.items() %}
-        <a href="{{ url_for('set_language', lang=code) }}"
+        <a href="{{ lang_url(code) }}"
            class="{% if current_lang == code %}active{% endif %}"
            title="{{ name }}">{{ code|upper }}</a>
       {% endfor %}

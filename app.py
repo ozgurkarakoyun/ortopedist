@@ -62,7 +62,18 @@ def create_app(config_class=Config):
     app.register_blueprint(public_bp)
     app.register_blueprint(admin_bp, url_prefix="/admin")
     app.register_blueprint(api_bp, url_prefix="/api")
+# Sağlık kontrolü (DB'ye dokunmaz, Railway healthcheck için)
+    @app.route("/healthz")
+    def healthz():
+        return {"ok": True}, 200
 
+    # İlk deploy'da tabloları otomatik oluştur (idempotent)
+    with app.app_context():
+        try:
+            db.create_all()
+            app.logger.info("DB tabloları kontrol edildi/oluşturuldu.")
+        except Exception as e:
+            app.logger.warning(f"db.create_all() başarısız (DB henüz hazır olmayabilir): {e}")
     # CSRF muafiyetini sadece API için (gerekirse)
     csrf.exempt(api_bp)
 

@@ -117,7 +117,9 @@
         <button type="button" class="btn btn-secondary" onclick="translateTo('ar')">→ العربية</button>
         <hr>
         <button type="button" class="btn btn-secondary" onclick="suggestImages()">📷 Görsel Önerisi</button>
+        <button type="button" class="btn btn-secondary" onclick="generateCover()">🎨 AI Kapak Üret</button>
         <div id="imageSuggestions"></div>
+        <div id="coverGenStatus"></div>
       </div>
       {% endif %}
 
@@ -236,6 +238,44 @@ async function suggestImages() {
       ).join('') + '</ul>';
   } catch (e) {
     out.innerHTML = `<small style="color:red">${e.message}</small>`;
+  }
+}
+
+async function generateCover() {
+  if (!POST_ID) return;
+  if (!confirm('AI ile kapak görseli üretilsin mi?\n\n• OpenAI API kullanır (~$0.04 / görsel)\n• 30-60 saniye sürer\n• Mevcut kapak görseliyle değiştirir')) return;
+
+  const status = document.getElementById('coverGenStatus');
+  status.innerHTML = '⏳ AI prompt hazırlıyor ve görsel üretiyor… (30-60 sn)';
+  status.style.color = '#5a6473';
+
+  try {
+    const r = await fetch(`/api/posts/${POST_ID}/generate-cover`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({lang: '{{ lang }}', save_as_cover: true})
+    });
+    const data = await r.json();
+    if (data.error) throw new Error(data.error);
+
+    // Featured image alanını güncelle
+    document.getElementById('featured_image').value = data.url;
+
+    status.innerHTML = `
+      <div style="margin-top:.75rem; padding:.75rem; background:#d1fae5; border-radius:6px; color:#065f46;">
+        ✓ Kapak görseli oluşturuldu ve yazıya atandı.<br>
+        <small>Model: ${data.model} | Boyut: ${(data.size_bytes/1024).toFixed(0)} KB</small>
+      </div>
+      <img src="${data.url}" alt="Üretilen kapak" style="margin-top:.75rem; max-width:100%; border-radius:8px; border:1px solid #e6e8ed;">
+      <details style="margin-top:.5rem;">
+        <summary style="cursor:pointer; font-size:.85rem; color:#5a6473;">Üretim prompt'unu göster</summary>
+        <small style="display:block; margin-top:.5rem; padding:.5rem; background:#f7f8fa; border-radius:4px; font-family:monospace; white-space:pre-wrap;">${data.prompt}</small>
+      </details>
+      <p style="margin-top:.75rem; font-size:.85rem;"><strong>Önemli:</strong> Yazıyı kaydet ki kapak değişikliği kalıcı olsun.</p>
+    `;
+    status.style.color = 'inherit';
+  } catch (e) {
+    status.innerHTML = `<div class="flash flash-error" style="margin-top:.5rem;">${e.message}</div>`;
   }
 }
 

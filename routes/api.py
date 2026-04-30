@@ -2,6 +2,8 @@
 Internal API: AI özellikleri için JSON endpoint'leri.
 Hepsi admin login gerektirir.
 """
+import os
+
 from flask import Blueprint, jsonify, request, current_app
 from flask_login import login_required, current_user
 
@@ -289,6 +291,83 @@ def image_suggestions(post_id):
         return jsonify({"error": str(e)}), 500
 
     return jsonify(result)
+
+
+# --- AI Kapak Görseli Üretimi ---------------------------------------------
+
+@api_bp.route("/posts/<int:post_id>/generate-cover", methods=["POST"])
+@login_required
+@limiter.limit("20 per hour")
+def generate_cover(post_id):
+    """
+    OpenAI ile yazı için kapak görseli üretir.
+    Gereksinimler:
+      - ANTHROPIC_API_KEY (prompt için)
+      - OPENAI_API_KEY (görsel üretimi için)
+    Üretilen görseli /static/images/uploads/ altına kaydeder, URL döner.
+    """
+    post = db.session.get(Post, post_id)
+    if not post:
+        return jsonify({"error": "Yazı bulunamadı"}), 404
+
+    openai_key = (current_app.config.get("OPENAI_API_KEY")
+                  or os.environ.get("OPENAI_API_KEY"))
+    if not openai_key:
+        return jsonify({
+            "error": "OPENAI_API_KEY env var tanımlı değil. "
+                     "Railway → Variables'a OPENAI_API_KEY=sk-... ekleyin."
+        }), 503
+
+    data = request.get_json(silent=True) or {}
+    lang = data.get("lang", "tr")
+    quality = data.get("quality", os.environ.get("IMAGE_QUALITY", "medium"))
+    save_as_cover = data.get("save_as_cover", True)
+
+    translation = next((t for t in post.translations if t.language == lang), None)
+    if not translation:
+        return jsonify({"error": "Bu dilde çeviri yok"}), 404
+
+    try:
+        from services.image_generator import ImageGenerator
+    except ImportError as e:
+        return jsonify({"error": f"image_generator yüklenemedi: {e}"}), 500
+
+    try:
+        gen = ImageGenerator(
+            anthropic_key=current_app.config["ANTHROPIC_API_KEY"],
+            openai_key=openai_key,
+            claude_model=current_app.config["AI_MODEL"],
+            image_model=os.environ.get("IMAGE_MODEL", "gpt-image-1"),
+            image_quality=quality,
+        )
+        result = gen.generate(
+            title=translation.title,
+            excerpt=translation.excerpt or "",
+            upload_dir=current_app.config["UPLOAD_FOLDER"],
+        )
+    except RuntimeError as e:
+        # Beklenen hata mesajları (kredi/moderation vb.)
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        current_app.logger.exception("Cover generation error")
+        _log_ai("generate_cover", success=False, error=str(e))
+        return jsonify({"error": str(e)}), 500
+
+    # Yazıya kapak olarak otomatik ata
+    if save_as_cover:
+        post.featured_image = result["url"]
+        db.session.commit()
+
+    _log_ai("generate_cover", success=True)
+    return jsonify({
+        "ok": True,
+        "url": result["url"],
+        "filename": result["filename"],
+        "prompt": result["prompt"],
+        "size_bytes": result["size_bytes"],
+        "model": result["model"],
+        "saved_as_cover": save_as_cover,
+    })
 
 
 # --- Yardımcı --------------------------------------------------------------

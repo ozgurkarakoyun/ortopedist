@@ -39,6 +39,11 @@ class Config:
     ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
     AI_MODEL = os.environ.get("AI_MODEL", "claude-sonnet-4-5")
 
+    # OpenAI (görsel üretimi için)
+    OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
+    IMAGE_MODEL = os.environ.get("IMAGE_MODEL", "gpt-image-1")
+    IMAGE_QUALITY = os.environ.get("IMAGE_QUALITY", "medium")  # low | medium | high
+
     # Admin
     ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "admin@ortopedist.blog")
 

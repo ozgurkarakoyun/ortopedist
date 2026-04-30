@@ -26,6 +26,7 @@ Pillow==10.4.0
 
 # AI
 anthropic==0.39.0
+openai==1.54.4
 
 # HTTP & utils
 requests==2.32.3

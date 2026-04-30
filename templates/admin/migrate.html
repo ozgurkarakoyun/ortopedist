@@ -6,18 +6,51 @@
   <h1>WordPress'ten İçerik Aktar</h1>
 </div>
 
-<div class="admin-card">
-  <h2>📥 ortopedist.blog içeriğini aktar</h2>
+{% if existing_count > 0 %}
+<div class="alert alert-warning" style="margin-bottom:1rem;">
+  Daha önce aktarılan {{ existing_count }} yazı var. Yeniden çalıştırırsanız sadece eksikler eklenir.
+</div>
+{% endif %}
+
+<!-- Sekme başlıkları -->
+<div class="lang-tabs" style="margin-bottom:1rem;">
+  <button id="tabXml" class="lang-tab active" type="button" onclick="showTab('xml')">📄 WXR Yükle (Önerilen)</button>
+  <button id="tabUrl" class="lang-tab" type="button" onclick="showTab('url')">🌐 URL'den Tara</button>
+</div>
+
+<!-- WXR XML Upload -->
+<div id="paneXml" class="admin-card">
+  <h2>📄 WordPress Export Dosyası (WXR XML)</h2>
   <p class="muted">
-    Mevcut WordPress sitenden tüm yazıları sitemap+RSS üzerinden çekip Markdown'a çevirir
-    ve yeni veritabanına aktarır. Aynı slug zaten varsa atlanır (idempotent — birden fazla
-    çalıştırılabilir).
+    En güvenilir yöntem. WordPress'te <strong>Araçlar → Dışa Aktar</strong> ile aldığın
+    XML dosyasını buraya yükle. Tarihler, slug'lar, kategoriler ve içerik aynen orijinal
+    sitedeki gibi gelir.
   </p>
-  {% if existing_count > 0 %}
-  <div class="alert alert-warning">
-    Daha önce aktarılan {{ existing_count }} yazı var. Yeniden çalıştırırsanız sadece eksikler eklenir.
+
+  <div>
+    <label style="display:block; margin:1rem 0;">
+      <strong>XML dosyası</strong>
+      <input id="xmlFile" type="file" accept=".xml"
+             style="display:block; margin-top:.5rem; padding:.5rem; width:100%;
+                    border:2px dashed #c4b5fd; border-radius:8px; background:#faf5ff;">
+    </label>
+
+    <label style="display:flex; align-items:center; gap:.4rem; margin:.5rem 0;">
+      <input id="xmlDryRun" type="checkbox">
+      Dry-run (sadece önizleme, kaydetme)
+    </label>
+
+    <button id="xmlBtn" type="button" class="btn btn-primary">▶ Yükle ve Aktar</button>
   </div>
-  {% endif %}
+</div>
+
+<!-- URL Scrape -->
+<div id="paneUrl" class="admin-card" style="display:none;">
+  <h2>🌐 URL'den İçerik Tara (Yedek Yöntem)</h2>
+  <p class="muted">
+    XML dosyana erişimin yoksa, sitemap+RSS üzerinden tarama yapar. Yavaş (1-3 dk) ve
+    bazı yazıların kapak görseli/kategori bilgisi eksik gelebilir.
+  </p>
 
   <div class="form-grid" style="grid-template-columns: 1fr;">
     <label>Kaynak URL
@@ -25,17 +58,18 @@
     </label>
     <div class="row" style="display:flex; gap:.5rem; align-items:center; flex-wrap:wrap;">
       <label style="flex-direction:row; align-items:center; gap:.4rem;">
-        <input id="dryRun" type="checkbox"> Dry-run (sadece önizleme, kaydetme)
+        <input id="dryRun" type="checkbox"> Dry-run
       </label>
       <label style="flex-direction:row; align-items:center; gap:.4rem;">
         Limit: <input id="limit" type="number" value="0" min="0" style="width:80px;">
         <small class="muted">(0 = tümü)</small>
       </label>
     </div>
-    <button id="runBtn" class="btn btn-primary" style="width: fit-content;">▶ Aktarımı Başlat</button>
+    <button id="runBtn" type="button" class="btn btn-primary" style="width: fit-content;">▶ Aktarımı Başlat</button>
   </div>
 </div>
 
+<!-- Progress -->
 <div id="progressCard" class="admin-card" style="display:none;">
   <h3 id="progressTitle">⏳ Aktarım çalışıyor…</h3>
   <div id="progressStats" class="muted small"></div>
@@ -45,20 +79,79 @@
 <script>
 const CSRF = "{{ csrf_token() }}";
 
-document.getElementById('runBtn').addEventListener('click', async () => {
-  const btn = document.getElementById('runBtn');
+function showTab(name) {
+  document.getElementById('paneXml').style.display = name === 'xml' ? 'block' : 'none';
+  document.getElementById('paneUrl').style.display = name === 'url' ? 'block' : 'none';
+  document.getElementById('tabXml').classList.toggle('active', name === 'xml');
+  document.getElementById('tabUrl').classList.toggle('active', name === 'url');
+}
+
+function renderResults(data, title) {
   const card = document.getElementById('progressCard');
-  const title = document.getElementById('progressTitle');
+  const titleEl = document.getElementById('progressTitle');
   const stats = document.getElementById('progressStats');
   const list = document.getElementById('progressList');
 
+  card.style.display = 'block';
+  titleEl.textContent = `✓ ${title}: ${data.success || 0} aktarıldı, ${data.skipped || 0} atlandı, ${data.failed || 0} hata (toplam ${data.total || 0})`;
+  stats.textContent = '';
+
+  list.innerHTML = (data.items || []).map(item => {
+    const icon = {imported:'✅', skipped:'⏭️', preview:'👁', failed:'❌', error:'⚠️'}[item.status] || '?';
+    const color = {imported:'#16a34a', skipped:'#8a94a3', preview:'#0d6e70', failed:'#dc2626', error:'#dc2626'}[item.status] || 'inherit';
+    return `<li style="padding:.4rem 0; border-bottom:1px solid #f0f2f5; color:${color}">${icon} <strong>${item.title || item.slug || '?'}</strong>${item.error ? ' — '+item.error : ''}</li>`;
+  }).join('');
+
+  if ((data.success || 0) > 0) {
+    const linkP = document.createElement('p');
+    linkP.innerHTML = `<a href="{{ url_for('admin.posts_list') }}" class="btn btn-primary" style="margin-top:1rem;">→ Yazıları Görüntüle</a>`;
+    card.appendChild(linkP);
+  }
+}
+
+// XML upload
+document.getElementById('xmlBtn').addEventListener('click', async () => {
+  const file = document.getElementById('xmlFile').files[0];
+  if (!file) return alert('Önce XML dosyasını seç');
+  if (!confirm(`"${file.name}" dosyasını yükleyip aktarayım mı?`)) return;
+
+  const btn = document.getElementById('xmlBtn');
+  btn.disabled = true;
+  document.getElementById('progressCard').style.display = 'block';
+  document.getElementById('progressTitle').textContent = '⏳ XML işleniyor… (~30 sn)';
+  document.getElementById('progressList').innerHTML = '';
+
+  const fd = new FormData();
+  fd.append('xml', file);
+  if (document.getElementById('xmlDryRun').checked) fd.append('dry_run', 'on');
+
+  try {
+    const r = await fetch('{{ url_for("admin.migrate_wp_upload_xml") }}', {
+      method: 'POST',
+      headers: {'X-CSRFToken': CSRF},
+      body: fd
+    });
+    const data = await r.json();
+    if (data.error) throw new Error(data.error);
+    renderResults(data, 'XML İçe Aktarım Bitti');
+  } catch (e) {
+    document.getElementById('progressTitle').textContent = '❌ Hata';
+    document.getElementById('progressStats').innerHTML = `<div class="flash flash-error">${e.message}</div>`;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// URL scrape
+document.getElementById('runBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('runBtn');
   if (!confirm('Aktarımı başlatmak istediğinize emin misiniz? Bu işlem 1-3 dakika sürebilir.')) return;
 
   btn.disabled = true;
-  card.style.display = 'block';
-  title.textContent = '⏳ Aktarım çalışıyor… (1-3 dk)';
-  stats.textContent = 'Sitemap okunuyor, yazılar indiriliyor…';
-  list.innerHTML = '';
+  document.getElementById('progressCard').style.display = 'block';
+  document.getElementById('progressTitle').textContent = '⏳ Aktarım çalışıyor… (1-3 dk)';
+  document.getElementById('progressStats').textContent = 'Sitemap okunuyor, yazılar indiriliyor…';
+  document.getElementById('progressList').innerHTML = '';
 
   try {
     const r = await fetch('{{ url_for("admin.migrate_wp_run") }}', {
@@ -72,24 +165,10 @@ document.getElementById('runBtn').addEventListener('click', async () => {
     });
     const data = await r.json();
     if (data.error) throw new Error(data.error);
-
-    title.textContent = `✓ Bitti: ${data.success} aktarıldı, ${data.skipped} atlandı, ${data.failed} hata (toplam ${data.total})`;
-    stats.textContent = '';
-
-    list.innerHTML = data.items.map(item => {
-      const icon = {imported:'✅', skipped:'⏭️', preview:'👁', failed:'❌', error:'⚠️'}[item.status] || '?';
-      const color = {imported:'#16a34a', skipped:'#8a94a3', preview:'#0d6e70', failed:'#dc2626', error:'#dc2626'}[item.status] || 'inherit';
-      return `<li style="padding:.4rem 0; border-bottom:1px solid #f0f2f5; color:${color}">${icon} <strong>${item.title || item.url}</strong>${item.error ? ' — '+item.error : ''}</li>`;
-    }).join('');
-
-    if (data.success > 0) {
-      const link = document.createElement('p');
-      link.innerHTML = `<a href="{{ url_for('admin.posts_list') }}" class="btn btn-primary" style="margin-top:1rem;">→ Yazıları Görüntüle</a>`;
-      card.appendChild(link);
-    }
+    renderResults(data, 'Aktarım Bitti');
   } catch (e) {
-    title.textContent = '❌ Hata';
-    stats.innerHTML = `<div class="flash flash-error">${e.message}</div>`;
+    document.getElementById('progressTitle').textContent = '❌ Hata';
+    document.getElementById('progressStats').innerHTML = `<div class="flash flash-error">${e.message}</div>`;
   } finally {
     btn.disabled = false;
   }

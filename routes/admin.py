@@ -352,6 +352,107 @@ def migrate_wp_run():
     return jsonify(results)
 
 
+# --- WXR (WordPress Export XML) Import ------------------------------------
+
+@admin_bp.route("/migrate-wp/upload-xml", methods=["POST"])
+@login_required
+@limiter.limit("10 per hour")
+def migrate_wp_upload_xml():
+    """
+    WordPress export XML (WXR) dosyasını yükler, parse eder ve içeri aktarır.
+    Bu yöntem scrape'a göre daha güvenilir: tarihler, slug'lar, kategoriler
+    aynen orijinal sitedeki gibi gelir.
+    """
+    if "xml" not in request.files:
+        return jsonify({"error": "XML dosyası yüklenmedi"}), 400
+
+    f = request.files["xml"]
+    if not f.filename or not f.filename.lower().endswith(".xml"):
+        return jsonify({"error": "Dosya .xml uzantılı olmalı"}), 400
+
+    dry_run = request.form.get("dry_run") == "on"
+
+    # Geçici dosyaya kaydet
+    import tempfile
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".xml")
+    f.save(tmp.name)
+    tmp.close()
+
+    try:
+        from services.wxr_importer import parse_wxr
+    except ImportError as e:
+        return jsonify({"error": f"WXR importer yüklenemedi: {e}"}), 500
+
+    results = {"total": 0, "success": 0, "skipped": 0, "failed": 0, "items": []}
+
+    try:
+        for data in parse_wxr(tmp.name):
+            results["total"] += 1
+            try:
+                # Slug çakışıyorsa atla
+                existing = db.session.query(Post).filter_by(slug=data["slug"]).first()
+                if existing:
+                    results["skipped"] += 1
+                    results["items"].append({"status": "skipped", "title": data["title"], "slug": data["slug"]})
+                    continue
+
+                if dry_run:
+                    results["items"].append({"status": "preview", "title": data["title"], "slug": data["slug"]})
+                    continue
+
+                # Kategori (ilk kategoriyi kullan)
+                cat_id = None
+                if data["categories"]:
+                    cat_name = data["categories"][0]
+                    if cat_name.lower() not in ("uncategorized", "kategorisiz", ""):
+                        cat_slug = slugify(cat_name)
+                        cat = db.session.query(Category).filter_by(slug=cat_slug).first()
+                        if not cat:
+                            cat = Category(slug=cat_slug, name_tr=cat_name)
+                            db.session.add(cat)
+                            db.session.flush()
+                        cat_id = cat.id
+
+                post = Post(
+                    slug=data["slug"],
+                    status="published",
+                    category_id=cat_id,
+                    featured_image=data.get("featured_image"),
+                    published_at=data["published_at"] or datetime.utcnow(),
+                    original_url=data.get("link"),
+                    author_id=current_user.id,
+                )
+                db.session.add(post)
+                db.session.flush()
+
+                translation = PostTranslation(
+                    post_id=post.id,
+                    language="tr",
+                    title=data["title"][:500] or "(Başlıksız)",
+                    excerpt=(data["excerpt"] or "")[:500] or None,
+                    content=data["content"] or "(İçerik boş)",
+                    is_published=True,
+                )
+                db.session.add(translation)
+                db.session.commit()
+
+                results["success"] += 1
+                results["items"].append({"status": "imported", "title": data["title"], "slug": data["slug"]})
+
+            except Exception as e:
+                db.session.rollback()
+                results["failed"] += 1
+                results["items"].append({"status": "error", "title": data.get("title", "?"), "error": str(e)})
+
+    finally:
+        try:
+            os.unlink(tmp.name)
+        except Exception:
+            pass
+
+    return jsonify(results)
+
+
 # --- Bootstrap: İlk Admin Oluşturma ----------------------------------------
 # Sadece BOOTSTRAP_KEY env var doğru sağlandığında çalışır.
 # Bir admin oluşturulduktan sonra otomatik devre dışı kalır (güvenlik).

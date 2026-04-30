@@ -1,45 +1,41 @@
-# İçerik Migrasyonu Patch'i
+# WordPress İçerik Migrasyonu Patch'i (v2 — WXR XML desteği)
 
-Bu paket, admin paneline tek tıkla WordPress'ten içerik aktarımı butonu ekler.
+Bu paket admin paneline iki migrasyon yöntemi ekler:
+1. **WXR XML upload** (önerilen) — WordPress'in resmi export dosyasını yükle
+2. **URL scrape** (yedek) — sitemap+RSS taraması
 
-## Değişen 4 dosya
+## Değişen / yeni dosyalar
 
 ```
-routes/admin.py              (genişletildi - 2 yeni endpoint)
-templates/admin/base.html    (sidebar'a "İçerik Aktar" linki)
-templates/admin/dashboard.html (dashboard'a migrasyon kartı)
-templates/admin/migrate.html (YENİ - migrasyon arayüzü)
+services/wxr_importer.py            (YENİ - WXR XML parser)
+routes/admin.py                     (genişletildi - 3 yeni endpoint)
+templates/admin/migrate.html        (sekme yapısı: XML / URL)
+templates/admin/base.html           (sidebar'a "İçerik Aktar" linki)
+templates/admin/dashboard.html      (dashboard'a migrasyon kartı)
 ```
 
 ## Kurulum
 
-Mevcut projende, bu zip'i açıp dosyaları aynı yollara kopyala (üzerine yaz):
-
 ```bash
 cd /yol/to/ortopedist-blog
-unzip ~/Downloads/migrate-patch.zip -d .
-# routes/admin.py, templates/admin/base.html, dashboard.html, migrate.html güncellenecek
+unzip ~/Downloads/migrate-patch.zip -d /tmp/
 
-git add routes/admin.py templates/admin/
-git commit -m "feat: tek tık WordPress içerik migrasyonu"
+cp /tmp/migrate-patch/routes/admin.py routes/admin.py
+cp /tmp/migrate-patch/services/wxr_importer.py services/wxr_importer.py
+cp /tmp/migrate-patch/templates/admin/migrate.html templates/admin/migrate.html
+cp /tmp/migrate-patch/templates/admin/base.html templates/admin/base.html
+cp /tmp/migrate-patch/templates/admin/dashboard.html templates/admin/dashboard.html
+
+git add routes/admin.py services/wxr_importer.py templates/admin/
+git commit -m "feat: WXR XML import + bootstrap admin"
 git push
 ```
 
-## Kullanım
+Railway otomatik redeploy eder (~1-2 dk).
 
-1. Railway otomatik yeni deploy eder (~1-2 dk)
-2. https://ortopedist.blog/admin → Giriş yap
-3. Sol menüden **📥 İçerik Aktar** veya dashboard'daki **WordPress'ten Aktar →**
-4. **▶ Aktarımı Başlat** → 1-3 dk bekle
-5. Sonuç: 40 yazı aktarıldı. "→ Yazıları Görüntüle" linkiyle kontrol et.
+## Kullanım — WXR Yöntemi (Önerilen)
 
-İlk önce **Dry-run** kutusunu işaretleyip 5 yazılık limit ile preview alabilirsin.
-
-## Özellikler
-
-- **Idempotent:** Aynı slug zaten varsa atlar; tekrar tekrar çalıştırılabilir
-- **Rate limit:** Saatte 3 kez (yanlışlıkla spam'a karşı)
-- **Dry-run:** Sadece önizleme, kaydetme
-- **Limit:** Test için ilk N yazıyı dene (0 = tümü)
-- **Anlık geri bildirim:** Her yazı için ✅/⏭️/❌ durumu gözükür
-- **Login gerekli:** Sadece admin görür
+1. WordPress.com → **Araçlar → Dışa Aktar** → tüm içerik → XML indir
+2. Yeni site → admin → **📥 İçerik Aktar** → **WXR Yükle** sekmesi
+3. XML dosyasını seç → **Yükle ve Aktar**
+4. ~30 saniyede tüm yazılar gelir; her yazının ✅ durumu görünür

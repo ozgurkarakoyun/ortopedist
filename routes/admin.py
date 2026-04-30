@@ -7,6 +7,7 @@ Admin panel routes.
 - /admin/posts/<id>/edit   -> Düzenleme
 - /admin/topics            -> AI konu önerileri
 - /admin/translations/<id> -> Çeviri yönetimi
+- /admin/bootstrap         -> İlk admin oluşturma (BOOTSTRAP_KEY env var ile korunur)
 """
 from datetime import datetime
 import json
@@ -14,13 +15,13 @@ import os
 
 from flask import (
     Blueprint, render_template, redirect, url_for, request, flash,
-    abort, current_app, jsonify
+    abort, current_app, jsonify, render_template_string
 )
 from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.utils import secure_filename
 from slugify import slugify
 
-from extensions import db, limiter
+from extensions import db, limiter, csrf
 from models import Post, PostTranslation, User, Category, TopicSuggestion, AILog
 
 admin_bp = Blueprint("admin", __name__)
@@ -349,3 +350,93 @@ def migrate_wp_run():
             results["items"].append({"url": url, "status": "error", "error": str(e)})
 
     return jsonify(results)
+
+
+# --- Bootstrap: İlk Admin Oluşturma ----------------------------------------
+# Sadece BOOTSTRAP_KEY env var doğru sağlandığında çalışır.
+# Bir admin oluşturulduktan sonra otomatik devre dışı kalır (güvenlik).
+
+@admin_bp.route("/bootstrap", methods=["GET", "POST"])
+@csrf.exempt
+@limiter.limit("10 per hour")
+def bootstrap():
+    expected = os.environ.get("BOOTSTRAP_KEY") or current_app.config.get("BOOTSTRAP_KEY")
+    if not expected:
+        return ("BOOTSTRAP_KEY ortam değişkeni Railway Variables'a eklenmemiş. "
+                "Lütfen önce ekleyin (Railway → Variables → BOOTSTRAP_KEY=... ).", 503)
+
+    provided = request.args.get("key") or request.form.get("key", "")
+    if provided != expected:
+        return ("Geçersiz veya eksik anahtar. URL'ye ?key=... eklediğinizden emin olun.", 403)
+
+    # Zaten admin varsa: kapalı
+    if db.session.query(User).filter(User.role == "admin").first():
+        return ("Bu sistemde zaten admin tanımlı. Bootstrap endpoint'i devre dışı. "
+                "Lütfen mevcut hesapla giriş yapın: /admin/login — "
+                "veya Railway shell ile yeni hesap oluşturun.", 403)
+
+    if request.method == "POST":
+        email = request.form.get("email", "").strip().lower()
+        name = request.form.get("name", "").strip() or "Admin"
+        password = request.form.get("password", "")
+
+        if not email or "@" not in email:
+            return _bootstrap_form(provided, error="Geçerli bir e-posta gerekli.")
+        if len(password) < 8:
+            return _bootstrap_form(provided, error="Şifre en az 8 karakter olmalı.")
+
+        try:
+            u = User(email=email, name=name, role="admin", is_active_user=True)
+            u.set_password(password)
+            db.session.add(u)
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            return _bootstrap_form(provided, error=f"Hata: {e}")
+
+        return render_template_string("""
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>Hazır</title>
+<style>body{font-family:sans-serif;max-width:480px;margin:4rem auto;padding:2rem;background:#f5f7fa}
+.box{background:white;border-radius:12px;padding:2.5rem;box-shadow:0 2px 12px rgba(0,0,0,.06)}
+h1{color:#0d6e70;margin:0 0 1rem} a.btn{display:inline-block;margin-top:1rem;padding:.75rem 1.5rem;
+background:#0d6e70;color:white;text-decoration:none;border-radius:6px;font-weight:600}</style></head>
+<body><div class="box">
+<h1>✓ Admin oluşturuldu</h1>
+<p><strong>{{ email }}</strong> hesabıyla giriş yapabilirsiniz.</p>
+<p style="color:#dc2626;font-size:.9rem;background:#fee2e2;padding:.75rem;border-radius:6px;margin-top:1rem">
+⚠ Güvenlik için Railway Variables'tan <code>BOOTSTRAP_KEY</code> değişkenini şimdi silin.
+Bu endpoint zaten otomatik kilitlendi (admin oluştuğu için), ama temiz olsun.</p>
+<a href="/admin/login" class="btn">→ Giriş Yap</a>
+</div></body></html>
+""", email=email)
+
+    return _bootstrap_form(provided)
+
+
+def _bootstrap_form(key_val, error=None):
+    return render_template_string("""
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>İlk Admin Oluştur</title>
+<style>body{font-family:sans-serif;max-width:440px;margin:4rem auto;padding:2rem;background:#f5f7fa}
+.box{background:white;border-radius:12px;padding:2.5rem;box-shadow:0 2px 12px rgba(0,0,0,.06)}
+h1{color:#1a2332;margin:0 0 .5rem;font-size:1.5rem}
+.muted{color:#5a6473;font-size:.9rem;margin:0 0 1.5rem}
+label{display:block;margin-bottom:1rem;font-size:.85rem;font-weight:600;color:#5a6473}
+input{width:100%;padding:.625rem .75rem;border:1px solid #e6e8ed;border-radius:6px;
+margin-top:.4rem;font-size:1rem;font-family:inherit;box-sizing:border-box}
+button{width:100%;padding:.75rem;background:#0d6e70;color:white;border:0;border-radius:6px;
+font-weight:600;font-size:1rem;cursor:pointer;margin-top:.5rem}
+.err{background:#fee2e2;color:#991b1b;padding:.75rem;border-radius:6px;
+font-size:.9rem;margin-bottom:1rem}</style></head>
+<body><div class="box">
+<h1>İlk Admin Oluştur</h1>
+<p class="muted">Bu form, sadece henüz hiç admin tanımlanmamışsa çalışır. Bir admin oluşturulduktan sonra otomatik kilitlenir.</p>
+{% if error %}<div class="err">{{ error }}</div>{% endif %}
+<form method="POST">
+<input type="hidden" name="key" value="{{ key }}">
+<label>E-posta<input type="email" name="email" required></label>
+<label>İsim<input type="text" name="name" placeholder="Özgür Karakoyun"></label>
+<label>Şifre <small>(min 8 karakter)</small><input type="password" name="password" required minlength="8"></label>
+<button type="submit">Oluştur</button>
+</form>
+</div></body></html>
+""", key=key_val, error=error)

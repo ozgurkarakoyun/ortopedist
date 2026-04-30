@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}{% if current_lang == 'tr' %}İletişim{% elif current_lang == 'en' %}Contact{% else %}اتصال{% endif %} — {{ site_name }}{% endblock %}
+
+{% block content %}
+<div class="container narrow page">
+  <h1>{% if current_lang == 'tr' %}İletişim{% elif current_lang == 'en' %}Contact{% else %}اتصال{% endif %}</h1>
+  <div class="contact-grid">
+    <div class="contact-card">
+      <h3>{% if current_lang == 'tr' %}Randevu{% elif current_lang == 'en' %}Appointment{% else %}موعد{% endif %}</h3>
+      <p><a href="tel:+905459195413">+90 545 919 5413</a></p>
+    </div>
+    <div class="contact-card">
+      <h3>{% if current_lang == 'tr' %}Konum{% elif current_lang == 'en' %}Location{% else %}الموقع{% endif %}</h3>
+      <p>Tekirdağ, {% if current_lang == 'ar' %}تركيا{% else %}Türkiye{% endif %}</p>
+    </div>
+    <div class="contact-card">
+      <h3>Web</h3>
+      <p><a href="https://www.ozgurkarakoyun.com" target="_blank" rel="noopener">ozgurkarakoyun.com</a></p>
+    </div>
+  </div>
+</div>
+{% endblock %}

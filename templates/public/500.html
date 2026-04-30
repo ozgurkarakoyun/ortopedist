@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block title %}500 — {{ site_name }}{% endblock %}
+{% block content %}
+<div class="container narrow page error-page">
+  <h1>500</h1>
+  <p>{% if current_lang == 'tr' %}Sunucu hatası. Lütfen tekrar deneyin.{% elif current_lang == 'en' %}Server error. Please try again.{% else %}خطأ في الخادم. يرجى المحاولة مرة أخرى.{% endif %}</p>
+</div>
+{% endblock %}

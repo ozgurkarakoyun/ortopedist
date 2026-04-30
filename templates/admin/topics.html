@@ -1,0 +1,108 @@
+{% extends "admin/base.html" %}
+{% block title %}AI Konu Önerileri{% endblock %}
+{% block content %}
+
+<div class="admin-header">
+  <h1>AI Konu Önerileri</h1>
+  <div class="btn-group">
+    <a href="?status=new" class="btn {% if status == 'new' %}btn-primary{% endif %}">Yeni</a>
+    <a href="?status=used" class="btn {% if status == 'used' %}btn-primary{% endif %}">Kullanıldı</a>
+    <a href="?status=dismissed" class="btn {% if status == 'dismissed' %}btn-primary{% endif %}">Reddedildi</a>
+    <button id="discoverBtn" class="btn btn-primary">🔍 Yeni Keşfet</button>
+  </div>
+</div>
+
+<div id="discoverStatus" class="muted small"></div>
+
+<div class="topic-list">
+  {% for t in topics %}
+  <div class="topic-card">
+    <div class="topic-score" title="İlgi puanı">{{ "%.0f"|format(t.relevance_score * 100) }}%</div>
+    <div class="topic-body">
+      <h3>{{ t.title }}</h3>
+      {% if t.description %}<p>{{ t.description }}</p>{% endif %}
+      {% if t.keywords %}<div class="topic-tags">{% for kw in t.keywords.split(',') %}<span class="tag">{{ kw.strip() }}</span>{% endfor %}</div>{% endif %}
+      <small class="muted">{{ t.created_at.strftime('%d.%m.%Y') }}</small>
+    </div>
+    <div class="topic-actions">
+      <button class="btn btn-primary" onclick="writeFromTopic({{ t.id }}, '{{ t.title|e }}')">
+        ✨ Bu Konuda Yaz
+      </button>
+      <form action="{{ url_for('admin.topic_dismiss', topic_id=t.id) }}" method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-sm btn-danger">Reddet</button>
+      </form>
+    </div>
+  </div>
+  {% else %}
+    <p class="muted">Bu kategoride konu yok. Yukarıdan keşfet butonunu kullan.</p>
+  {% endfor %}
+</div>
+
+<script>
+document.getElementById('discoverBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('discoverBtn');
+  const status = document.getElementById('discoverStatus');
+  btn.disabled = true;
+  status.textContent = 'Web search yapılıyor… (30-90 sn)';
+  try {
+    const r = await fetch('/api/topics/discover', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({count: 5})
+    });
+    const data = await r.json();
+    if (data.error) throw new Error(data.error);
+    status.textContent = `✓ ${data.topics.length} yeni konu eklendi.`;
+    setTimeout(() => location.reload(), 1500);
+  } catch (e) {
+    status.textContent = 'Hata: ' + e.message;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+async function writeFromTopic(topicId, title) {
+  // Yeni yazı sayfasına yönlendir, AI yazma için topic_id'yi taşı
+  if (!confirm(`"${title}" için AI yazısı oluşturulsun mu?`)) return;
+  // Direct generate flow: oluştur, sonra editöre git
+  const tmpBtn = event.target;
+  tmpBtn.disabled = true;
+  tmpBtn.textContent = 'Yazılıyor…';
+  try {
+    const r = await fetch('/api/posts/generate', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({topic: title, topic_id: topicId, target_words: 800})
+    });
+    const data = await r.json();
+    if (data.error) throw new Error(data.error);
+    // localStorage'a kaydet, yeni-yazı sayfasında tara
+    sessionStorage.setItem('ai_draft', JSON.stringify(data));
+    window.location.href = '{{ url_for("admin.post_new") }}?from_ai=1';
+  } catch (e) {
+    alert('Hata: ' + e.message);
+    tmpBtn.disabled = false;
+    tmpBtn.textContent = '✨ Bu Konuda Yaz';
+  }
+}
+
+// Yeni yazı sayfasında AI taslağını yükle
+if (window.location.search.includes('from_ai=1')) {
+  const draft = sessionStorage.getItem('ai_draft');
+  if (draft) {
+    const d = JSON.parse(draft);
+    setTimeout(() => {
+      document.getElementById('title').value = d.title || '';
+      document.getElementById('excerpt').value = d.excerpt || '';
+      document.getElementById('content').value = d.content || '';
+      document.getElementById('meta_title').value = d.meta_title || '';
+      document.getElementById('meta_description').value = d.meta_description || '';
+      document.getElementById('meta_keywords').value = d.meta_keywords || '';
+      sessionStorage.removeItem('ai_draft');
+    }, 100);
+  }
+}
+</script>
+
+{% endblock %}

@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+
+{% block title %}
+{% if category %}{{ category.name(current_lang) }} — {{ site_name }}
+{% else %}{{ site_name }} — {% if current_lang == 'tr' %}Ortopedi & Travmatoloji Blog{% elif current_lang == 'en' %}Orthopedics & Traumatology Blog{% else %}مدونة جراحة العظام{% endif %}
+{% endif %}
+{% endblock %}
+
+{% block content %}
+
+{% if not category and pagination.page == 1 %}
+<section class="hero">
+  <div class="container">
+    <h1 class="hero-title">
+      {% if current_lang == 'tr' %}Ortopedi ve travmatoloji üzerine{% elif current_lang == 'en' %}On orthopedics and traumatology{% else %}عن جراحة العظام والإصابات{% endif %}
+    </h1>
+    <p class="hero-subtitle">
+      {% if current_lang == 'tr' %}Hasta dostu, eğitici yazılar — {{ author_name }}
+      {% elif current_lang == 'en' %}Patient-friendly, educational articles — {{ author_name }}
+      {% else %}مقالات تعليمية ودودة للمرضى — {{ author_name }}{% endif %}
+    </p>
+    <form action="{{ url_for('public.search') if current_lang == 'tr' else url_for('public.search', lang=current_lang) }}" class="hero-search">
+      <input type="search" name="q" placeholder="{% if current_lang == 'tr' %}Yazılarda ara…{% elif current_lang == 'en' %}Search articles…{% else %}ابحث في المقالات…{% endif %}">
+      <button type="submit">→</button>
+    </form>
+  </div>
+</section>
+{% endif %}
+
+<section class="container posts-section">
+  {% if category %}
+  <h2 class="section-title">{{ category.name(current_lang) }}</h2>
+  {% endif %}
+
+  {% if posts %}
+  <div class="post-grid">
+    {% for post in posts %}
+      {% set t = post.get_translation(current_lang) %}
+      {% if t %}
+      <article class="post-card">
+        {% if post.featured_image %}
+        <a href="{% if current_lang == 'tr' %}{{ url_for('public.post_tr', slug=post.slug) }}{% else %}{{ url_for('public.post_' + current_lang, slug=post.slug) }}{% endif %}">
+          <img class="post-card-image" src="{{ post.featured_image }}" alt="{{ t.title }}" loading="lazy">
+        </a>
+        {% endif %}
+        <div class="post-card-body">
+          {% if post.category %}
+          <span class="post-card-cat">{{ post.category.name(current_lang) }}</span>
+          {% endif %}
+          <h3 class="post-card-title">
+            <a href="{% if current_lang == 'tr' %}{{ url_for('public.post_tr', slug=post.slug) }}{% else %}{{ url_for('public.post_' + current_lang, slug=post.slug) }}{% endif %}">{{ t.title }}</a>
+          </h3>
+          {% if t.excerpt %}<p class="post-card-excerpt">{{ t.excerpt }}</p>{% endif %}
+          <div class="post-card-meta">
+            <time datetime="{{ post.published_at or post.created_at }}">
+              {{ (post.published_at or post.created_at).strftime('%d.%m.%Y') }}
+            </time>
+          </div>
+        </div>
+      </article>
+      {% endif %}
+    {% endfor %}
+  </div>
+
+  {% if pagination.pages > 1 %}
+  <nav class="pagination">
+    {% if pagination.has_prev %}
+      <a href="?page={{ pagination.prev_num }}">←</a>
+    {% endif %}
+    {% for p in pagination.iter_pages() %}
+      {% if p %}
+        <a href="?page={{ p }}" class="{% if p == pagination.page %}active{% endif %}">{{ p }}</a>
+      {% else %}
+        <span>…</span>
+      {% endif %}
+    {% endfor %}
+    {% if pagination.has_next %}
+      <a href="?page={{ pagination.next_num }}">→</a>
+    {% endif %}
+  </nav>
+  {% endif %}
+
+  {% else %}
+  <div class="empty">
+    <p>{% if current_lang == 'tr' %}Henüz yayınlanmış yazı bulunmuyor.{% elif current_lang == 'en' %}No published articles yet.{% else %}لا توجد مقالات منشورة بعد.{% endif %}</p>
+  </div>
+  {% endif %}
+</section>
+
+{% endblock %}

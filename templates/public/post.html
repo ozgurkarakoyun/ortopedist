@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% block title %}{{ translation.meta_title or translation.title }} — {{ site_name }}{% endblock %}
+{% block meta_description %}{{ translation.meta_description or translation.excerpt or '' }}{% endblock %}
+
+{% block meta_extra %}
+{% if translation.meta_keywords %}<meta name="keywords" content="{{ translation.meta_keywords }}">{% endif %}
+<meta property="og:title" content="{{ translation.meta_title or translation.title }}">
+<meta property="og:description" content="{{ translation.meta_description or translation.excerpt or '' }}">
+<meta property="og:type" content="article">
+<meta property="og:locale" content="{{ {'tr':'tr_TR','en':'en_US','ar':'ar_AR'}[current_lang] }}">
+{% if post.featured_image %}<meta property="og:image" content="{{ post.featured_image }}">{% endif %}
+
+<!-- hreflang alternatifleri -->
+{% for code in ['tr','en','ar'] %}
+  {% if post.has_translation(code) %}
+    {% set route = 'public.post_tr' if code == 'tr' else ('public.post_' + code) %}
+    <link rel="alternate" hreflang="{{ code }}" href="{{ url_for(route, slug=post.slug, _external=True) }}">
+  {% endif %}
+{% endfor %}
+
+<!-- JSON-LD Schema.org Article -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "MedicalScholarlyArticle",
+  "headline": {{ translation.title|tojson }},
+  "datePublished": "{{ (post.published_at or post.created_at).isoformat() }}",
+  "dateModified": "{{ post.updated_at.isoformat() }}",
+  "author": {
+    "@type": "Person",
+    "name": "{{ author_name }}",
+    "jobTitle": "{% if current_lang == 'tr' %}Ortopedi ve Travmatoloji Uzmanı{% elif current_lang == 'en' %}Orthopedic Surgeon{% else %}اختصاصي جراحة العظام{% endif %}"
+  },
+  "description": {{ (translation.meta_description or translation.excerpt or '')|tojson }}
+}
+</script>
+{% endblock %}
+
+{% block content %}
+<article class="post-article">
+  <div class="container narrow">
+    <header class="post-header">
+      {% if post.category %}
+      <a href="{% if current_lang == 'tr' %}{{ url_for('public.category', slug=post.category.slug) }}{% else %}{{ url_for('public.category', slug=post.category.slug, lang=current_lang) }}{% endif %}" class="post-category">
+        {{ post.category.name(current_lang) }}
+      </a>
+      {% endif %}
+      <h1 class="post-title">{{ translation.title }}</h1>
+      <div class="post-meta">
+        <span>{{ author_name }}</span>
+        <span>·</span>
+        <time>{{ (post.published_at or post.created_at).strftime('%d.%m.%Y') }}</time>
+      </div>
+    </header>
+
+    {% if post.featured_image %}
+    <img class="post-hero-image" src="{{ post.featured_image }}" alt="{{ translation.title }}">
+    {% endif %}
+
+    <div class="post-content prose">
+      {{ content_html|safe }}
+    </div>
+
+    <!-- Diğer dillerde de var mı? -->
+    {% set other_langs = [] %}
+    {% for code in ['tr','en','ar'] %}
+      {% if code != current_lang and post.has_translation(code) %}
+        {% set other_langs = other_langs + [code] %}
+      {% endif %}
+    {% endfor %}
+    {% if other_langs %}
+    <div class="other-langs">
+      <span>{% if current_lang == 'tr' %}Diğer diller:{% elif current_lang == 'en' %}Other languages:{% else %}لغات أخرى:{% endif %}</span>
+      {% for code in other_langs %}
+        {% set route = 'public.post_tr' if code == 'tr' else ('public.post_' + code) %}
+        <a href="{{ url_for(route, slug=post.slug) }}">{{ languages[code] }}</a>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+</article>
+
+{% if related %}
+<section class="container narrow related-posts">
+  <h3 class="section-title">
+    {% if current_lang == 'tr' %}İlgili Yazılar{% elif current_lang == 'en' %}Related Articles{% else %}مقالات ذات صلة{% endif %}
+  </h3>
+  <div class="related-grid">
+    {% for r in related %}
+      {% set rt = r.get_translation(current_lang) %}
+      {% if rt %}
+      <a href="{% if current_lang == 'tr' %}{{ url_for('public.post_tr', slug=r.slug) }}{% else %}{{ url_for('public.post_' + current_lang, slug=r.slug) }}{% endif %}" class="related-card">
+        <h4>{{ rt.title }}</h4>
+        {% if rt.excerpt %}<p>{{ rt.excerpt[:120] }}…</p>{% endif %}
+      </a>
+      {% endif %}
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+{% endblock %}

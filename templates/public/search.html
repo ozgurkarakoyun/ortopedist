@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}
+{% if current_lang == 'tr' %}"{{ q }}" için arama{% elif current_lang == 'en' %}Search "{{ q }}"{% else %}البحث عن "{{ q }}"{% endif %} — {{ site_name }}
+{% endblock %}
+
+{% block content %}
+<div class="container narrow page">
+  <h1>{% if current_lang == 'tr' %}Arama{% elif current_lang == 'en' %}Search{% else %}بحث{% endif %}</h1>
+
+  <form action="" class="search-form">
+    <input type="search" name="q" value="{{ q }}" placeholder="{% if current_lang == 'tr' %}Aranacak kelime…{% elif current_lang == 'en' %}Search query…{% else %}كلمة البحث…{% endif %}">
+    <button type="submit">{% if current_lang == 'tr' %}Ara{% elif current_lang == 'en' %}Search{% else %}بحث{% endif %}</button>
+  </form>
+
+  {% if q %}
+    {% if results %}
+      <p class="muted">
+        {% if current_lang == 'tr' %}{{ results|length }} sonuç bulundu.{% elif current_lang == 'en' %}{{ results|length }} results.{% else %}{{ results|length }} نتائج.{% endif %}
+      </p>
+      <div class="post-grid">
+        {% for post in results %}
+          {% set t = post.get_translation(current_lang) %}
+          {% if t %}
+          <article class="post-card">
+            <div class="post-card-body">
+              <h3 class="post-card-title">
+                <a href="{% if current_lang == 'tr' %}{{ url_for('public.post_tr', slug=post.slug) }}{% else %}{{ url_for('public.post_' + current_lang, slug=post.slug) }}{% endif %}">{{ t.title }}</a>
+              </h3>
+              {% if t.excerpt %}<p class="post-card-excerpt">{{ t.excerpt }}</p>{% endif %}
+            </div>
+          </article>
+          {% endif %}
+        {% endfor %}
+      </div>
+    {% else %}
+      <p>{% if current_lang == 'tr' %}Sonuç bulunamadı.{% elif current_lang == 'en' %}No results.{% else %}لا توجد نتائج.{% endif %}</p>
+    {% endif %}
+  {% endif %}
+</div>
+{% endblock %}

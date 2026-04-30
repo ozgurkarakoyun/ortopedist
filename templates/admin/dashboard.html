@@ -1,0 +1,104 @@
+{% extends "admin/base.html" %}
+{% block title %}Panel{% endblock %}
+{% block content %}
+<div class="admin-header">
+  <h1>Hoş geldin, {{ current_user.name }}</h1>
+  <div>
+    <a href="{{ url_for('admin.post_new') }}" class="btn btn-primary">+ Yeni Yazı</a>
+  </div>
+</div>
+
+<div class="stat-grid">
+  <div class="stat-card">
+    <div class="stat-num">{{ stats.total_posts }}</div>
+    <div class="stat-label">Toplam Yazı</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-num">{{ stats.published }}</div>
+    <div class="stat-label">Yayında</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-num">{{ stats.drafts }}</div>
+    <div class="stat-label">Taslak</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-num">{{ stats.topics_pending }}</div>
+    <div class="stat-label">Bekleyen Konu</div>
+  </div>
+  <div class="stat-card highlight">
+    <div class="stat-num">{{ stats.translations_pending }}</div>
+    <div class="stat-label">Onay Bekleyen Çeviri</div>
+  </div>
+</div>
+
+<div class="admin-grid-2">
+  <section class="admin-card">
+    <h2>Son Yazılar</h2>
+    {% if recent_posts %}
+      <ul class="admin-list">
+        {% for p in recent_posts %}
+          {% set t = p.get_translation('tr') %}
+          <li>
+            <a href="{{ url_for('admin.post_edit', post_id=p.id) }}">{{ t.title if t else p.slug }}</a>
+            <span class="badge badge-{{ p.status }}">{{ p.status }}</span>
+            <small>{{ p.created_at.strftime('%d.%m.%Y') }}</small>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="muted">Henüz yazı yok. <a href="{{ url_for('admin.post_new') }}">İlk yazını oluştur</a>.</p>
+    {% endif %}
+  </section>
+
+  <section class="admin-card">
+    <h2>Onay Bekleyen Çeviriler</h2>
+    {% if pending_translations %}
+      <ul class="admin-list">
+        {% for t in pending_translations %}
+          <li>
+            <a href="{{ url_for('admin.post_edit', post_id=t.post_id, lang=t.language) }}">{{ t.title }}</a>
+            <span class="badge">{{ t.language|upper }}</span>
+            <small>{{ t.updated_at.strftime('%d.%m.%Y') }}</small>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="muted">Bekleyen çeviri yok.</p>
+    {% endif %}
+  </section>
+</div>
+
+<section class="admin-card">
+  <h2>Hızlı İşlem: AI Konu Keşfet</h2>
+  <p class="muted">Web search ile güncel ortopedi/travmatoloji konularını bul.</p>
+  <button id="discoverBtn" class="btn btn-primary">🔍 Yeni Konular Keşfet</button>
+  <div id="discoverResult" style="margin-top: 1rem;"></div>
+</section>
+
+<script>
+document.getElementById('discoverBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('discoverBtn');
+  const out = document.getElementById('discoverResult');
+  btn.disabled = true;
+  btn.textContent = 'Aranıyor… (30-60 sn)';
+  out.innerHTML = '';
+  try {
+    const r = await fetch('/api/topics/discover', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({count: 5})
+    });
+    const data = await r.json();
+    if (data.error) throw new Error(data.error);
+    out.innerHTML = '<strong>Bulunan konular:</strong><ul>' +
+      data.topics.map(t => `<li><strong>${t.title}</strong> — ${t.description||''}</li>`).join('') +
+      `</ul><a href="{{ url_for('admin.topics') }}">→ Konuları görüntüle ve yazıya başla</a>`;
+  } catch (e) {
+    out.innerHTML = `<div class="flash flash-error">${e.message}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🔍 Yeni Konular Keşfet';
+  }
+});
+</script>
+{% endblock %}

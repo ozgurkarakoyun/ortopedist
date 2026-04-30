@@ -1,0 +1,58 @@
+{% extends "admin/base.html" %}
+{% block title %}Yazılar{% endblock %}
+{% block content %}
+<div class="admin-header">
+  <h1>Yazılar</h1>
+  <div class="btn-group">
+    <a href="{{ url_for('admin.posts_list') }}" class="btn {% if status == 'all' %}btn-primary{% endif %}">Tümü</a>
+    <a href="?status=published" class="btn {% if status == 'published' %}btn-primary{% endif %}">Yayında</a>
+    <a href="?status=draft" class="btn {% if status == 'draft' %}btn-primary{% endif %}">Taslak</a>
+    <a href="{{ url_for('admin.post_new') }}" class="btn btn-primary">+ Yeni</a>
+  </div>
+</div>
+
+<div class="admin-card">
+<table class="admin-table">
+  <thead>
+    <tr>
+      <th>Başlık</th>
+      <th>Durum</th>
+      <th>Diller</th>
+      <th>Tarih</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for p in posts %}
+      {% set t = p.get_translation('tr') %}
+      <tr>
+        <td>
+          <strong>{{ t.title if t else p.slug }}</strong>
+          {% if p.ai_generated %}<span class="badge badge-ai">AI</span>{% endif %}
+        </td>
+        <td><span class="badge badge-{{ p.status }}">{{ p.status }}</span></td>
+        <td>
+          {% for code in ['tr','en','ar'] %}
+            {% if p.has_translation(code) %}
+              <span class="lang-pill {% if p.is_published(code) %}pub{% endif %}">{{ code|upper }}</span>
+            {% else %}
+              <span class="lang-pill missing">{{ code|upper }}</span>
+            {% endif %}
+          {% endfor %}
+        </td>
+        <td><small>{{ p.created_at.strftime('%d.%m.%Y') }}</small></td>
+        <td>
+          <a href="{{ url_for('admin.post_edit', post_id=p.id) }}" class="btn btn-sm">Düzenle</a>
+          <form action="{{ url_for('admin.post_delete', post_id=p.id) }}" method="POST" style="display:inline" onsubmit="return confirm('Silinsin mi?')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sm btn-danger">Sil</button>
+          </form>
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="5" class="muted">Yazı yok.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

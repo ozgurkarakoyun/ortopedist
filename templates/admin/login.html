@@ -1,0 +1,25 @@
+{% extends "admin/base.html" %}
+{% block title %}Giriş{% endblock %}
+{% block content %}
+<div class="login-page">
+  <form method="POST" class="login-form">
+    <div class="login-logo"><span class="logo-mark">●</span> {{ site_name }}</div>
+    <h2>Admin Girişi</h2>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for cat, msg in messages %}
+        <div class="flash flash-{{ cat }}">{{ msg }}</div>
+      {% endfor %}
+    {% endwith %}
+
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>E-posta
+      <input type="email" name="email" required autofocus>
+    </label>
+    <label>Şifre
+      <input type="password" name="password" required>
+    </label>
+    <button type="submit" class="btn btn-primary">Giriş Yap</button>
+  </form>
+</div>
+{% endblock %}

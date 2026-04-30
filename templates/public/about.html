@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}{% if current_lang == 'tr' %}Hakkımda{% elif current_lang == 'en' %}About{% else %}عني{% endif %} — {{ site_name }}{% endblock %}
+
+{% block content %}
+<div class="container narrow page">
+  <h1>{% if current_lang == 'tr' %}Hakkımda{% elif current_lang == 'en' %}About{% else %}عني{% endif %}</h1>
+
+  {% if current_lang == 'tr' %}
+  <p>Merhaba, ben Doç. Dr. Özgür Karakoyun. Ortopedi ve travmatoloji, kas iskelet sistemi
+  hastalıkları ve yaralanmalarıyla ilgilenen bir tıp dalıdır.</p>
+  <p>2004'te Marmara Üniversitesi İngilizce Tıp Fakültesi'nden mezun oldum. 2010'da
+  Şişli Etfal Eğitim ve Araştırma Hastanesi Ortopedi ve Travmatoloji Kliniği'nde uzmanlığımı
+  tamamladım. 2016'da doçentlik unvanı aldım. 2018'den bu yana Tekirdağ'da özel muayenehanemde
+  hizmet veriyorum.</p>
+  <p>Özel ilgi alanlarım: <strong>boy uzatma ameliyatları, deformite düzeltme, kaynamayan
+  kırık tedavisi, kemik iltihabı (osteomyelit) ve osseointegrasyon</strong>.</p>
+  {% elif current_lang == 'en' %}
+  <p>Hello, I'm Assoc. Prof. Dr. Özgür Karakoyun. Orthopedics and traumatology is the medical
+  branch dealing with musculoskeletal disorders and injuries.</p>
+  <p>I graduated from Marmara University Faculty of English Medicine in 2004. I completed my
+  residency in 2010 at Şişli Etfal Training and Research Hospital. I received the title of
+  Associate Professor in 2016 and have been running my private practice in Tekirdağ since 2018.</p>
+  <p>My special interests include: <strong>limb lengthening, deformity correction, non-union
+  fracture treatment, osteomyelitis, and osseointegration</strong>.</p>
+  {% else %}
+  <p>مرحبًا، أنا الأستاذ المشارك الدكتور أوزغور كاراكويون. جراحة العظام والإصابات هي الفرع الطبي
+  الذي يتعامل مع اضطرابات وإصابات الجهاز العضلي الهيكلي.</p>
+  <p>تخرجت من كلية الطب الإنجليزية بجامعة مرمرة عام 2004. أكملت إقامتي في عام 2010. حصلت على
+  لقب أستاذ مشارك في عام 2016. أدير عيادتي الخاصة في تكيرداغ منذ عام 2018.</p>
+  <p>اهتماماتي الخاصة: <strong>إطالة الأطراف، تصحيح التشوهات، علاج الكسور غير الملتئمة،
+  التهاب العظم، والاندماج العظمي</strong>.</p>
+  {% endif %}
+</div>
+{% endblock %}

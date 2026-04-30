@@ -1,0 +1,300 @@
+{% extends "admin/base.html" %}
+{% block title %}{% if post %}Yazıyı Düzenle{% else %}Yeni Yazı{% endif %}{% endblock %}
+{% block content %}
+
+<div class="admin-header">
+  <h1>{% if post %}Yazıyı Düzenle{% else %}Yeni Yazı{% endif %}</h1>
+  {% if post %}
+  <div class="lang-tabs">
+    {% for code in ['tr','en','ar'] %}
+      <a href="?lang={{ code }}" class="lang-tab {% if lang == code %}active{% endif %}">
+        {{ code|upper }}
+        {% if post.has_translation(code) %}<span class="dot"></span>{% endif %}
+      </a>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+
+{% if not post %}
+<!-- Yeni yazı için AI yardımı -->
+<div class="admin-card ai-panel">
+  <h3>🤖 AI Yardımıyla Yazı Oluştur</h3>
+  <p class="muted">Bir konu gir; AI senin tarzında bir taslak hazırlasın.</p>
+  <div class="row">
+    <input id="aiTopic" type="text" placeholder="Örn: Kalça protezi sonrası iyileşme süreci">
+    <input id="aiWords" type="number" value="800" min="400" max="2000" style="width:100px;">
+    <button id="aiWriteBtn" class="btn btn-primary" type="button">✨ Yaz</button>
+  </div>
+  <div id="aiWriteStatus" class="muted small" style="margin-top:.5rem;"></div>
+</div>
+{% endif %}
+
+<form method="POST" class="post-form">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <div class="form-grid">
+    <div class="form-main">
+      <label>Başlık
+        <input type="text" name="title" id="title" value="{{ translation.title if translation else '' }}" required>
+      </label>
+
+      <label>Özet
+        <textarea name="excerpt" id="excerpt" rows="2">{{ translation.excerpt if translation else '' }}</textarea>
+      </label>
+
+      <label>İçerik (Markdown)
+        <textarea name="content" id="content" rows="25" class="mono">{{ translation.content if translation else '' }}</textarea>
+      </label>
+
+      <details>
+        <summary>SEO Meta</summary>
+        <label>Meta Başlık
+          <input type="text" name="meta_title" id="meta_title" maxlength="70" value="{{ translation.meta_title if translation else '' }}">
+        </label>
+        <label>Meta Açıklama
+          <textarea name="meta_description" id="meta_description" rows="2" maxlength="200">{{ translation.meta_description if translation else '' }}</textarea>
+        </label>
+        <label>Anahtar Kelimeler (virgülle)
+          <input type="text" name="meta_keywords" id="meta_keywords" value="{{ translation.meta_keywords if translation else '' }}">
+        </label>
+        {% if post %}
+        <button type="button" class="btn btn-secondary" onclick="genSEO()">🤖 AI ile SEO Üret</button>
+        {% endif %}
+      </details>
+    </div>
+
+    <aside class="form-side">
+      <div class="admin-card">
+        <h4>Yayın</h4>
+        <label>Durum (Yazı geneli)
+          <select name="status">
+            <option value="draft" {% if post and post.status == 'draft' %}selected{% endif %}>Taslak</option>
+            <option value="published" {% if post and post.status == 'published' %}selected{% endif %}>Yayında</option>
+            <option value="archived" {% if post and post.status == 'archived' %}selected{% endif %}>Arşivlendi</option>
+          </select>
+        </label>
+        <label class="checkbox">
+          <input type="checkbox" name="publish_translation" {% if translation and translation.is_published %}checked{% endif %}>
+          Bu dilde yayında ({{ lang|upper }})
+        </label>
+        {% if translation and translation.ai_review_pending %}
+        <div class="alert alert-warning">⚠ Bu çeviri AI tarafından üretildi. Lütfen kontrol edip onayla.</div>
+        {% endif %}
+      </div>
+
+      <div class="admin-card">
+        <h4>Slug & Kategori</h4>
+        <label>Slug
+          <input type="text" name="slug" value="{{ post.slug if post else '' }}">
+        </label>
+        <label>Kategori
+          <select name="category_id">
+            <option value="">— Yok —</option>
+            {% for c in categories %}
+              <option value="{{ c.id }}" {% if post and post.category_id == c.id %}selected{% endif %}>{{ c.name_tr }}</option>
+            {% endfor %}
+          </select>
+        </label>
+      </div>
+
+      <div class="admin-card">
+        <h4>Kapak Görseli</h4>
+        <input type="text" name="featured_image" id="featured_image" placeholder="URL veya yükle" value="{{ post.featured_image if post else '' }}">
+        <input type="file" id="featuredFile" accept="image/*" style="margin-top:.5rem;">
+      </div>
+
+      {% if post %}
+      <div class="admin-card ai-panel">
+        <h4>🤖 AI İşlemleri</h4>
+        <button type="button" class="btn btn-secondary" onclick="enhancePost('improve')">Geliştir</button>
+        <button type="button" class="btn btn-secondary" onclick="enhancePost('expand')">Genişlet</button>
+        <button type="button" class="btn btn-secondary" onclick="enhancePost('modernize')">Güncelle</button>
+        <button type="button" class="btn btn-secondary" onclick="enhancePost('shorten')">Kısalt</button>
+        <hr>
+        <p class="small muted">Çeviri (taslak; onay gerekir)</p>
+        <button type="button" class="btn btn-secondary" onclick="translateTo('en')">→ English</button>
+        <button type="button" class="btn btn-secondary" onclick="translateTo('ar')">→ العربية</button>
+        <hr>
+        <button type="button" class="btn btn-secondary" onclick="suggestImages()">📷 Görsel Önerisi</button>
+        <button type="button" class="btn btn-secondary" onclick="generateCover()">🎨 AI Kapak Üret</button>
+        <div id="imageSuggestions"></div>
+        <div id="coverGenStatus"></div>
+      </div>
+      {% endif %}
+
+      <button type="submit" class="btn btn-primary btn-block">Kaydet</button>
+    </aside>
+  </div>
+</form>
+
+<script>
+const POST_ID = {{ post.id if post else 'null' }};
+const CSRF = "{{ csrf_token() }}";
+
+// AI: Yeni yazı oluştur
+const aiBtn = document.getElementById('aiWriteBtn');
+if (aiBtn) {
+  aiBtn.addEventListener('click', async () => {
+    const topic = document.getElementById('aiTopic').value.trim();
+    const words = parseInt(document.getElementById('aiWords').value, 10);
+    if (!topic) return alert('Konu girin');
+    aiBtn.disabled = true;
+    document.getElementById('aiWriteStatus').textContent = 'AI yazıyor… (30-90 sn)';
+    try {
+      const r = await fetch('/api/posts/generate', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({topic, target_words: words})
+      });
+      const data = await r.json();
+      if (data.error) throw new Error(data.error);
+      document.getElementById('title').value = data.title || '';
+      document.getElementById('excerpt').value = data.excerpt || '';
+      document.getElementById('content').value = data.content || '';
+      document.getElementById('meta_title').value = data.meta_title || '';
+      document.getElementById('meta_description').value = data.meta_description || '';
+      document.getElementById('meta_keywords').value = data.meta_keywords || '';
+      document.getElementById('aiWriteStatus').textContent = '✓ Hazır. İçeriği gözden geçir ve kaydet.';
+    } catch (e) {
+      document.getElementById('aiWriteStatus').textContent = 'Hata: ' + e.message;
+    } finally {
+      aiBtn.disabled = false;
+    }
+  });
+}
+
+async function enhancePost(mode) {
+  if (!POST_ID) return;
+  if (!confirm(`${mode} modunda AI ile geliştirilsin mi? (mevcut metnin üzerine yazılır)`)) return;
+  try {
+    const r = await fetch(`/api/posts/${POST_ID}/enhance`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({mode, lang: '{{ lang }}'})
+    });
+    const data = await r.json();
+    if (data.error) throw new Error(data.error);
+    if (data.title) document.getElementById('title').value = data.title;
+    if (data.content) document.getElementById('content').value = data.content;
+    alert('Hazır. Değişiklik özeti: ' + (data.summary_of_changes || ''));
+  } catch (e) {
+    alert('Hata: ' + e.message);
+  }
+}
+
+async function translateTo(lang) {
+  if (!POST_ID) return;
+  if (!confirm(`Bu yazı ${lang.toUpperCase()} diline çevrilsin mi? (Taslak olarak; sen onaylayana kadar yayında olmaz)`)) return;
+  try {
+    const r = await fetch(`/api/posts/${POST_ID}/translate`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({target_lang: lang})
+    });
+    const data = await r.json();
+    if (data.error) throw new Error(data.error);
+    if (confirm(`✓ Çeviri taslak olarak kaydedildi.\n\nGözden geçirme sayfasına gidilsin mi?`)) {
+      window.location.href = data.review_url;
+    }
+  } catch (e) {
+    alert('Hata: ' + e.message);
+  }
+}
+
+async function genSEO() {
+  if (!POST_ID) return;
+  try {
+    const r = await fetch(`/api/posts/${POST_ID}/seo`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({lang: '{{ lang }}'})
+    });
+    const data = await r.json();
+    if (data.error) throw new Error(data.error);
+    document.getElementById('meta_title').value = data.meta_title || '';
+    document.getElementById('meta_description').value = data.meta_description || '';
+    document.getElementById('meta_keywords').value = data.meta_keywords || '';
+  } catch (e) {
+    alert('Hata: ' + e.message);
+  }
+}
+
+async function suggestImages() {
+  if (!POST_ID) return;
+  const out = document.getElementById('imageSuggestions');
+  out.innerHTML = '⏳';
+  try {
+    const r = await fetch(`/api/posts/${POST_ID}/image-suggestions`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({lang: '{{ lang }}'})
+    });
+    const data = await r.json();
+    if (data.error) throw new Error(data.error);
+    out.innerHTML = '<ul class="img-suggest">' +
+      (data.suggestions || []).map(s =>
+        `<li><strong>${s.placement}</strong>: <code>${s.query}</code><br><small>${s.alt_text_tr || ''}</small></li>`
+      ).join('') + '</ul>';
+  } catch (e) {
+    out.innerHTML = `<small style="color:red">${e.message}</small>`;
+  }
+}
+
+async function generateCover() {
+  if (!POST_ID) return;
+  if (!confirm('AI ile kapak görseli üretilsin mi?\n\n• OpenAI API kullanır (~$0.04 / görsel)\n• 30-60 saniye sürer\n• Mevcut kapak görseliyle değiştirir')) return;
+
+  const status = document.getElementById('coverGenStatus');
+  status.innerHTML = '⏳ AI prompt hazırlıyor ve görsel üretiyor… (30-60 sn)';
+  status.style.color = '#5a6473';
+
+  try {
+    const r = await fetch(`/api/posts/${POST_ID}/generate-cover`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({lang: '{{ lang }}', save_as_cover: true})
+    });
+    const data = await r.json();
+    if (data.error) throw new Error(data.error);
+
+    // Featured image alanını güncelle
+    document.getElementById('featured_image').value = data.url;
+
+    status.innerHTML = `
+      <div style="margin-top:.75rem; padding:.75rem; background:#d1fae5; border-radius:6px; color:#065f46;">
+        ✓ Kapak görseli oluşturuldu ve yazıya atandı.<br>
+        <small>Model: ${data.model} | Boyut: ${(data.size_bytes/1024).toFixed(0)} KB</small>
+      </div>
+      <img src="${data.url}" alt="Üretilen kapak" style="margin-top:.75rem; max-width:100%; border-radius:8px; border:1px solid #e6e8ed;">
+      <details style="margin-top:.5rem;">
+        <summary style="cursor:pointer; font-size:.85rem; color:#5a6473;">Üretim prompt'unu göster</summary>
+        <small style="display:block; margin-top:.5rem; padding:.5rem; background:#f7f8fa; border-radius:4px; font-family:monospace; white-space:pre-wrap;">${data.prompt}</small>
+      </details>
+      <p style="margin-top:.75rem; font-size:.85rem;"><strong>Önemli:</strong> Yazıyı kaydet ki kapak değişikliği kalıcı olsun.</p>
+    `;
+    status.style.color = 'inherit';
+  } catch (e) {
+    status.innerHTML = `<div class="flash flash-error" style="margin-top:.5rem;">${e.message}</div>`;
+  }
+}
+
+// Görsel yükleme
+const ff = document.getElementById('featuredFile');
+if (ff) {
+  ff.addEventListener('change', async (e) => {
+    const f = e.target.files[0];
+    if (!f) return;
+    const fd = new FormData();
+    fd.append('file', f);
+    fd.append('csrf_token', CSRF);
+    try {
+      const r = await fetch('/admin/uploads', {method: 'POST', body: fd, headers: {'X-CSRFToken': CSRF}});
+      const data = await r.json();
+      if (data.url) document.getElementById('featured_image').value = data.url;
+    } catch (e) { alert('Yükleme hatası'); }
+  });
+}
+</script>
+
+{% endblock %}

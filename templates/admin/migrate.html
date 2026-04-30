@@ -1,0 +1,99 @@
+{% extends "admin/base.html" %}
+{% block title %}WordPress'ten İçerik Aktar{% endblock %}
+{% block content %}
+
+<div class="admin-header">
+  <h1>WordPress'ten İçerik Aktar</h1>
+</div>
+
+<div class="admin-card">
+  <h2>📥 ortopedist.blog içeriğini aktar</h2>
+  <p class="muted">
+    Mevcut WordPress sitenden tüm yazıları sitemap+RSS üzerinden çekip Markdown'a çevirir
+    ve yeni veritabanına aktarır. Aynı slug zaten varsa atlanır (idempotent — birden fazla
+    çalıştırılabilir).
+  </p>
+  {% if existing_count > 0 %}
+  <div class="alert alert-warning">
+    Daha önce aktarılan {{ existing_count }} yazı var. Yeniden çalıştırırsanız sadece eksikler eklenir.
+  </div>
+  {% endif %}
+
+  <div class="form-grid" style="grid-template-columns: 1fr;">
+    <label>Kaynak URL
+      <input id="src" type="text" value="https://ortopedist.blog">
+    </label>
+    <div class="row" style="display:flex; gap:.5rem; align-items:center; flex-wrap:wrap;">
+      <label style="flex-direction:row; align-items:center; gap:.4rem;">
+        <input id="dryRun" type="checkbox"> Dry-run (sadece önizleme, kaydetme)
+      </label>
+      <label style="flex-direction:row; align-items:center; gap:.4rem;">
+        Limit: <input id="limit" type="number" value="0" min="0" style="width:80px;">
+        <small class="muted">(0 = tümü)</small>
+      </label>
+    </div>
+    <button id="runBtn" class="btn btn-primary" style="width: fit-content;">▶ Aktarımı Başlat</button>
+  </div>
+</div>
+
+<div id="progressCard" class="admin-card" style="display:none;">
+  <h3 id="progressTitle">⏳ Aktarım çalışıyor…</h3>
+  <div id="progressStats" class="muted small"></div>
+  <ul id="progressList" style="list-style:none; padding:0; margin-top:1rem; max-height:500px; overflow-y:auto; font-size:.875rem;"></ul>
+</div>
+
+<script>
+const CSRF = "{{ csrf_token() }}";
+
+document.getElementById('runBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('runBtn');
+  const card = document.getElementById('progressCard');
+  const title = document.getElementById('progressTitle');
+  const stats = document.getElementById('progressStats');
+  const list = document.getElementById('progressList');
+
+  if (!confirm('Aktarımı başlatmak istediğinize emin misiniz? Bu işlem 1-3 dakika sürebilir.')) return;
+
+  btn.disabled = true;
+  card.style.display = 'block';
+  title.textContent = '⏳ Aktarım çalışıyor… (1-3 dk)';
+  stats.textContent = 'Sitemap okunuyor, yazılar indiriliyor…';
+  list.innerHTML = '';
+
+  try {
+    const r = await fetch('{{ url_for("admin.migrate_wp_run") }}', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+      body: JSON.stringify({
+        source: document.getElementById('src').value,
+        limit: parseInt(document.getElementById('limit').value, 10),
+        dry_run: document.getElementById('dryRun').checked
+      })
+    });
+    const data = await r.json();
+    if (data.error) throw new Error(data.error);
+
+    title.textContent = `✓ Bitti: ${data.success} aktarıldı, ${data.skipped} atlandı, ${data.failed} hata (toplam ${data.total})`;
+    stats.textContent = '';
+
+    list.innerHTML = data.items.map(item => {
+      const icon = {imported:'✅', skipped:'⏭️', preview:'👁', failed:'❌', error:'⚠️'}[item.status] || '?';
+      const color = {imported:'#16a34a', skipped:'#8a94a3', preview:'#0d6e70', failed:'#dc2626', error:'#dc2626'}[item.status] || 'inherit';
+      return `<li style="padding:.4rem 0; border-bottom:1px solid #f0f2f5; color:${color}">${icon} <strong>${item.title || item.url}</strong>${item.error ? ' — '+item.error : ''}</li>`;
+    }).join('');
+
+    if (data.success > 0) {
+      const link = document.createElement('p');
+      link.innerHTML = `<a href="{{ url_for('admin.posts_list') }}" class="btn btn-primary" style="margin-top:1rem;">→ Yazıları Görüntüle</a>`;
+      card.appendChild(link);
+    }
+  } catch (e) {
+    title.textContent = '❌ Hata';
+    stats.innerHTML = `<div class="flash flash-error">${e.message}</div>`;
+  } finally {
+    btn.disabled = false;
+  }
+});
+</script>
+
+{% endblock %}

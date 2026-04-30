@@ -75,6 +75,12 @@
   <div id="discoverResult" style="margin-top: 1rem;"></div>
 </section>
 
+<section class="admin-card">
+  <h2>📥 İçerik Migrasyonu</h2>
+  <p class="muted">ortopedist.blog WordPress sitendeki tüm yazıları tek tıkla buraya aktar.</p>
+  <a href="{{ url_for('admin.migrate_wp_page') }}" class="btn btn-primary">WordPress'ten Aktar →</a>
+</section>
+
 <script>
 document.getElementById('discoverBtn').addEventListener('click', async () => {
   const btn = document.getElementById('discoverBtn');

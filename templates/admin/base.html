@@ -32,6 +32,9 @@
     <a href="{{ url_for('admin.translations') }}" class="{% if request.endpoint == 'admin.translations' %}active{% endif %}">
       <span>🌐</span> Çeviri Onay
     </a>
+    <a href="{{ url_for('admin.migrate_wp_page') }}" class="{% if 'migrate' in (request.endpoint or '') %}active{% endif %}">
+      <span>📥</span> İçerik Aktar
+    </a>
     <hr>
     <a href="{{ url_for('public.index') }}" target="_blank">
       <span>🔗</span> Siteye Git

@@ -278,3 +278,74 @@ def translations():
         .all()
     )
     return render_template("admin/translations.html", pending=pending)
+
+
+# --- WordPress İçerik Migrasyonu (tek tık) --------------------------------
+
+@admin_bp.route("/migrate-wp", methods=["GET"])
+@login_required
+def migrate_wp_page():
+    """Migrasyon arayüzü."""
+    existing_count = db.session.query(Post).filter(Post.original_url.isnot(None)).count()
+    return render_template("admin/migrate.html", existing_count=existing_count)
+
+
+@admin_bp.route("/migrate-wp/run", methods=["POST"])
+@login_required
+@limiter.limit("3 per hour")
+def migrate_wp_run():
+    """
+    WordPress'ten içerik aktarımını çalıştırır (synchronous).
+    Mevcut migrate_content.py modülünü kullanır.
+    """
+    import sys
+    from pathlib import Path
+
+    # scripts/ klasörünü path'e ekle
+    scripts_dir = str(Path(current_app.root_path) / "scripts")
+    if scripts_dir not in sys.path:
+        sys.path.insert(0, scripts_dir)
+
+    try:
+        import migrate_content
+    except ImportError as e:
+        return jsonify({"error": f"Migration modülü yüklenemedi: {e}"}), 500
+
+    payload = request.get_json(silent=True) or {}
+    source = payload.get("source", "https://ortopedist.blog")
+    limit = int(payload.get("limit", 0))
+    dry_run = bool(payload.get("dry_run", False))
+
+    try:
+        urls = migrate_content.fetch_post_urls(source)
+    except Exception as e:
+        return jsonify({"error": f"Sitemap/RSS okunamadı: {e}"}), 500
+
+    if limit:
+        urls = urls[:limit]
+
+    results = {"total": len(urls), "success": 0, "skipped": 0, "failed": 0, "items": []}
+
+    for url in urls:
+        try:
+            data = migrate_content.parse_post_page(url)
+            existing = db.session.query(Post).filter_by(slug=data["slug"]).first()
+            if existing:
+                results["skipped"] += 1
+                results["items"].append({"url": url, "status": "skipped", "title": data.get("title", "")})
+                continue
+            if dry_run:
+                results["items"].append({"url": url, "status": "preview", "title": data.get("title", "")})
+                continue
+            post = migrate_content.import_post(data, dry_run=False)
+            if post:
+                results["success"] += 1
+                results["items"].append({"url": url, "status": "imported", "title": data.get("title", "")})
+            else:
+                results["failed"] += 1
+                results["items"].append({"url": url, "status": "failed", "error": "boş içerik"})
+        except Exception as e:
+            results["failed"] += 1
+            results["items"].append({"url": url, "status": "error", "error": str(e)})
+
+    return jsonify(results)

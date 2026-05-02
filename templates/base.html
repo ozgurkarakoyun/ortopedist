@@ -5,6 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}{{ site_name }}{% endblock %}</title>
   <meta name="description" content="{% block meta_description %}Ortopedi, travmatoloji ve hasta rehberleri.{% endblock %}">
+
+  {# Arama motoru sahiplik doğrulamaları (env var'lardan otomatik) #}
+  {% if google_site_verification %}<meta name="google-site-verification" content="{{ google_site_verification }}">{% endif %}
+  {% if bing_site_verification %}<meta name="msvalidate.01" content="{{ bing_site_verification }}">{% endif %}
+  {% if yandex_site_verification %}<meta name="yandex-verification" content="{{ yandex_site_verification }}">{% endif %}
+
   {% block meta_extra %}{% endblock %}
 
   <link rel="preconnect" href="https://fonts.googleapis.com">

@@ -131,6 +131,10 @@ def create_app(config_class=Config):
             "languages": app.config["LANGUAGES"],
             "current_lang": current_lang,
             "is_rtl": current_lang == "ar",
+            # Arama motoru sahiplik doğrulamaları (env var'lardan)
+            "google_site_verification": os.environ.get("GOOGLE_SITE_VERIFICATION", "").strip(),
+            "bing_site_verification": os.environ.get("BING_SITE_VERIFICATION", "").strip(),
+            "yandex_site_verification": os.environ.get("YANDEX_SITE_VERIFICATION", "").strip(),
         }
 
     # Jinja filter: 'None' string'ini ve boş değerleri temizler

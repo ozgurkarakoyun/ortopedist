@@ -1,52 +1,56 @@
-# AI Servisleri NoneType Düzeltmesi
+# Arama Motoru Doğrulama Patch'i
 
-## Sorun
+3 büyük arama motoru için sahiplik doğrulama meta tag'leri.
+Tag'ler env var'dan okunur — kodu değiştirmeden, sadece Variables ile yönetilir.
 
-"AI Konu Keşfet" butonu hata veriyordu:
-`unsupported operand type(s) for +: 'NoneType' and 'str'`
+## Desteklenen
 
-Sebep: Anthropic API'sinin web search tool'u veya bazı yanıt türleri,
-`block.text` alanı olan ama içi `None` olan blok döndürüyor.
-Eski kod `block.text + "string"` yapıyordu → patlıyor.
+- Google Search Console (`GOOGLE_SITE_VERIFICATION`)
+- Bing Webmaster Tools (`BING_SITE_VERIFICATION`)
+- Yandex Webmaster (`YANDEX_SITE_VERIFICATION`)
 
-Aynı bug 6 servisde tekrar ediyordu — hepsi düzeltildi.
-
-## Düzeltme
-
-`b.text` None olduğunda boş string olarak kabul edilir:
-- `b.text or ""` ile fallback
-- `getattr(block, "text", None)` ile güvenli erişim
-
-## Değişen 6 dosya
+## Değişen 2 dosya
 
 ```
-services/topic_finder.py          (Konu Keşfet özelliği — asıl bug burada)
-services/ai_writer.py              (AI yazı yazma)
-services/enhancer.py               (Yazı geliştirme)
-services/translator.py             (TR→EN/AR çeviri)
-services/seo.py                    (SEO meta üretimi)
-services/image_generator.py        (Kapak görseli prompt'u)
+app.py                  (env var'dan token'ları okur)
+templates/base.html     (head içine 3 meta tag, sadece dolu olanlar render edilir)
 ```
 
 ## Kurulum
 
 ```bash
 cd /yol/to/ortopedist
-unzip ~/Downloads/none-fix-patch.zip -d /tmp/
+unzip ~/Downloads/google-verify-patch.zip -d /tmp/
 
-cp /tmp/none-fix-patch/services/*.py services/
+cp /tmp/google-verify-patch/app.py app.py
+cp /tmp/google-verify-patch/templates/base.html templates/base.html
 
-git add services/
-git commit -m "fix: NoneType handling in all AI services"
+git add app.py templates/base.html
+git commit -m "feat: search engine verification meta tags"
 git push
 ```
 
-Railway redeploy bekle (~1-2 dk).
+## Railway Variables
 
-## Test
+Web service → Variables → +New:
 
-Admin → AI Konu Keşfet butonu → çalışmalı
-Admin → Bir yazıyı düzenle → AI Geliştir → çalışmalı
-Admin → Çevir (EN/AR) → çalışmalı
+```
+GOOGLE_SITE_VERIFICATION=lzTJTuZeGb2ZSBvaDMiFFrbtxZJMUWGNxITVjY_emdg
+```
 
-Sonuçta tüm AI özellikleri artık None text bloklarına karşı dayanıklı.
+Sonra (opsiyonel, bing/yandex ekleyince):
+```
+BING_SITE_VERIFICATION=...
+YANDEX_SITE_VERIFICATION=...
+```
+
+## Doğrulama
+
+Railway redeploy bittikten sonra:
+
+1. https://ortopedist.blog → Sağ tık → "Sayfa kaynağını görüntüle"
+2. Ctrl+F → "google-site-verification" ara
+3. Tag'i görmeli:
+   `<meta name="google-site-verification" content="lzTJTuZ...">`
+
+Sonra Search Console'a dön → **VERIFY** butonuna bas → ✅

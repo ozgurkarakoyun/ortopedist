@@ -268,17 +268,17 @@ def upload():
 
 # --- Çeviri yönetimi -------------------------------------------------------
 
-@admin_bp.route("/translations")
+@admin_bp.route("/translations/review")
 @login_required
-def translations():
-    """AI tarafından çevrilmiş ama henüz onaylanmamış yazılar."""
+def translations_review():
+    """AI tarafından çevrilmiş ama henüz onaylanmamış yazılar - tek tek inceleme."""
     pending = (
         db.session.query(PostTranslation)
         .filter_by(ai_review_pending=True)
         .order_by(PostTranslation.updated_at.desc())
         .all()
     )
-    return render_template("admin/translations.html", pending=pending)
+    return render_template("admin/translations_review.html", pending=pending)
 
 
 # --- WordPress İçerik Migrasyonu (tek tık) --------------------------------
@@ -663,3 +663,160 @@ def seo_cleanup_fill_missing_deprecated():
     return jsonify({
         "error": "Bu endpoint kaldırıldı. Yeni JS missing-list + fill-one kullanır.",
     }), 410
+
+
+# --- Toplu Çeviri (EN/AR) ----------------------------------------------------
+
+@admin_bp.route("/translations")
+@login_required
+def translations_page():
+    """Toplu çeviri arayüzü."""
+    # Yayında olan TR yazıları
+    tr_posts = db.session.query(PostTranslation).filter(
+        PostTranslation.is_published == True,  # noqa: E712
+        PostTranslation.language == "tr",
+    ).count()
+
+    # Hangi dilde kaç çeviri var?
+    en_count = db.session.query(PostTranslation).filter(
+        PostTranslation.language == "en",
+        PostTranslation.title.isnot(None),
+        db.func.length(db.func.coalesce(PostTranslation.content, "")) > 100,
+    ).count()
+    ar_count = db.session.query(PostTranslation).filter(
+        PostTranslation.language == "ar",
+        PostTranslation.title.isnot(None),
+        db.func.length(db.func.coalesce(PostTranslation.content, "")) > 100,
+    ).count()
+
+    # Onay bekleyen
+    pending = db.session.query(PostTranslation).filter(
+        PostTranslation.ai_review_pending == True,  # noqa: E712
+    ).count()
+
+    return render_template(
+        "admin/translations.html",
+        tr_count=tr_posts,
+        en_count=en_count,
+        ar_count=ar_count,
+        pending_count=pending,
+    )
+
+
+@admin_bp.route("/translations/missing-list")
+@login_required
+def translations_missing_list():
+    """Hedef dilde eksik çevirisi olan yazıların listesini döner."""
+    target_lang = request.args.get("lang")
+    if target_lang not in ("en", "ar"):
+        return jsonify({"error": "Geçersiz dil"}), 400
+
+    # Yayında olan TR yazıları al
+    tr_translations = db.session.query(PostTranslation).filter(
+        PostTranslation.is_published == True,  # noqa: E712
+        PostTranslation.language == "tr",
+    ).all()
+
+    items = []
+    for tr in tr_translations:
+        # Bu post için hedef dilde çeviri var mı, içerik yeterli mi?
+        target = db.session.query(PostTranslation).filter_by(
+            post_id=tr.post_id, language=target_lang
+        ).first()
+
+        needs_translation = (
+            not target
+            or not target.title
+            or not target.content
+            or len(target.content or "") < 100
+        )
+
+        if needs_translation:
+            items.append({
+                "post_id": tr.post_id,
+                "title": tr.title[:80],
+                "exists": target is not None,
+            })
+
+    return jsonify({"total": len(items), "lang": target_lang, "items": items})
+
+
+@admin_bp.route("/translations/translate-one/<int:post_id>/<lang>", methods=["POST"])
+@login_required
+@limiter.limit("100 per hour")
+def translations_translate_one(post_id, lang):
+    """Tek bir yazıyı hedef dile çevirir (taslak olarak)."""
+    if lang not in ("en", "ar"):
+        return jsonify({"error": "Geçersiz dil"}), 400
+
+    from services.translator import Translator
+
+    post = db.session.get(Post, post_id)
+    if not post:
+        return jsonify({"error": "Yazı bulunamadı"}), 404
+
+    source = next((t for t in post.translations if t.language == "tr"), None)
+    if not source:
+        return jsonify({"error": "Türkçe kaynak yok"}), 400
+
+    try:
+        translator = Translator(
+            api_key=current_app.config["ANTHROPIC_API_KEY"],
+            model=current_app.config["AI_MODEL"],
+        )
+        result = translator.translate(
+            title=source.title,
+            content=source.content or "",
+            excerpt=source.excerpt or "",
+            meta_title=source.meta_title or "",
+            meta_description=source.meta_description or "",
+            target_lang=lang,
+        )
+
+        target = next((t for t in post.translations if t.language == lang), None)
+        if not target:
+            target = PostTranslation(post_id=post.id, language=lang, title=result["title"], content=result["content"])
+            db.session.add(target)
+        target.title = result["title"]
+        target.content = result["content"]
+        target.excerpt = result.get("excerpt", "")
+        target.meta_title = result.get("meta_title", "")
+        target.meta_description = result.get("meta_description", "")
+        target.is_ai_translated = True
+        target.ai_review_pending = True
+        target.is_published = False
+        db.session.commit()
+
+        return jsonify({
+            "ok": True,
+            "title": target.title,
+            "review_url": f"/admin/posts/{post_id}/edit?lang={lang}",
+        })
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.exception(f"translate-one error post={post_id} lang={lang}")
+        return jsonify({"error": str(e)[:200]}), 500
+
+
+@admin_bp.route("/translations/publish-all/<lang>", methods=["POST"])
+@login_required
+def translations_publish_all(lang):
+    """
+    Onay bekleyen TÜM çevirileri tek seferde yayına alır.
+    DİKKAT: Bu adımdan önce çevirileri gözden geçirmek tavsiye edilir.
+    """
+    if lang not in ("en", "ar"):
+        return jsonify({"error": "Geçersiz dil"}), 400
+
+    pending = db.session.query(PostTranslation).filter(
+        PostTranslation.language == lang,
+        PostTranslation.ai_review_pending == True,  # noqa: E712
+    ).all()
+
+    count = 0
+    for t in pending:
+        t.is_published = True
+        t.ai_review_pending = False
+        count += 1
+    db.session.commit()
+    return jsonify({"ok": True, "published": count, "lang": lang})

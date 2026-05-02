@@ -1,30 +1,165 @@
 {% extends "admin/base.html" %}
-{% block title %}Çeviri Onayları{% endblock %}
+{% block title %}Toplu Çeviri{% endblock %}
 {% block content %}
+
 <div class="admin-header">
-  <h1>Onay Bekleyen Çeviriler</h1>
-  <p class="muted">AI tarafından üretilen çeviriler, sen onaylayana kadar yayında değildir.</p>
+  <h1>🌍 Toplu Çeviri</h1>
 </div>
 
 <div class="admin-card">
-{% if pending %}
-<table class="admin-table">
-  <thead>
-    <tr><th>Başlık</th><th>Dil</th><th>Tarih</th><th></th></tr>
-  </thead>
-  <tbody>
-    {% for t in pending %}
-    <tr>
-      <td>{{ t.title }}</td>
-      <td><span class="badge">{{ t.language|upper }}</span></td>
-      <td><small>{{ t.updated_at.strftime('%d.%m.%Y %H:%M') }}</small></td>
-      <td><a href="{{ url_for('admin.post_edit', post_id=t.post_id, lang=t.language) }}" class="btn btn-primary btn-sm">Gözden Geçir</a></td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
-{% else %}
-<p class="muted">Onay bekleyen çeviri yok.</p>
-{% endif %}
+  <h2>📊 Mevcut Durum</h2>
+  <div class="stat-grid" style="margin-top:1rem;">
+    <div class="stat-card">
+      <div class="stat-num">{{ tr_count }}</div>
+      <div class="stat-label">🇹🇷 Türkçe Yazı (kaynak)</div>
+    </div>
+    <div class="stat-card {% if en_count < tr_count %}highlight{% endif %}">
+      <div class="stat-num">{{ en_count }} / {{ tr_count }}</div>
+      <div class="stat-label">🇬🇧 İngilizce Çeviri</div>
+    </div>
+    <div class="stat-card {% if ar_count < tr_count %}highlight{% endif %}">
+      <div class="stat-num">{{ ar_count }} / {{ tr_count }}</div>
+      <div class="stat-label">🇸🇦 Arapça Çeviri</div>
+    </div>
+    <div class="stat-card {% if pending_count %}highlight{% endif %}">
+      <div class="stat-num">{{ pending_count }}</div>
+      <div class="stat-label">⏳ Onay Bekleyen</div>
+    </div>
+  </div>
+  <p style="margin-top:1rem;">
+    <a href="{{ url_for('admin.translations_review') }}" class="btn btn-secondary btn-sm">📋 Onay Bekleyenleri İncele ({{ pending_count }})</a>
+  </p>
 </div>
+
+<div class="admin-card">
+  <h2>📝 Akış</h2>
+  <ol style="margin-top:.5rem; line-height:1.8;">
+    <li><strong>Çeviri üret</strong> — Aşağıdaki butonlara basınca AI tüm eksik çevirileri taslak olarak oluşturur</li>
+    <li><strong>Gözden geçir</strong> — Yazılar otomatik yayınlanmaz, "Onay Bekleyen" durumda kalır. Birkaç tanesini incele (özellikle tıbbi terimler için)</li>
+    <li><strong>Yayına al</strong> — İncelediğinde "Yayına Al" butonuyla toplu yayına geç, ya da tek tek admin panelden</li>
+  </ol>
+  <p class="muted">
+    <strong>Tahmini maliyet:</strong> ~$0.04-0.06 / çeviri.
+    40 yazı × 2 dil = 80 çeviri → toplam ~$3.20-4.80<br>
+    <strong>Tahmini süre:</strong> ~10-15 saniye / çeviri.
+    80 çeviri → ~15-20 dakika
+  </p>
+</div>
+
+<div class="admin-card">
+  <h2>🇬🇧 İngilizce Çeviri</h2>
+  <p class="muted">Eksik İngilizce çevirileri AI ile toplu üret. Her çeviri taslak olarak kaydedilir, onay bekler.</p>
+  <button id="enBtn" class="btn btn-primary">🤖 Eksik EN Çevirilerini Üret</button>
+  <button id="enPublishBtn" class="btn btn-secondary">✅ Onay Bekleyen EN Çevirilerini Yayına Al</button>
+  <div id="enStatus" class="muted small" style="margin-top:.5rem;"></div>
+  <ul id="enList" style="list-style:none; padding:0; margin-top:1rem; max-height:400px; overflow-y:auto; font-size:.875rem;"></ul>
+</div>
+
+<div class="admin-card">
+  <h2>🇸🇦 Arapça Çeviri</h2>
+  <p class="muted">Eksik Arapça çevirileri AI ile toplu üret. RTL desteği ile birlikte gelir.</p>
+  <button id="arBtn" class="btn btn-primary">🤖 Eksik AR Çevirilerini Üret</button>
+  <button id="arPublishBtn" class="btn btn-secondary">✅ Onay Bekleyen AR Çevirilerini Yayına Al</button>
+  <div id="arStatus" class="muted small" style="margin-top:.5rem;"></div>
+  <ul id="arList" style="list-style:none; padding:0; margin-top:1rem; max-height:400px; overflow-y:auto; font-size:.875rem;"></ul>
+</div>
+
+<script>
+const CSRF = "{{ csrf_token() }}";
+
+async function bulkTranslate(lang, btn, statusEl, listEl) {
+  if (!confirm(`Eksik ${lang.toUpperCase()} çevirileri için AI çağrısı yapılsın mı?\n\nÇeviri başına ~10-15 saniye sürer.\nİşlem sırasında tarayıcı sekmesini açık tut.`)) return;
+
+  btn.disabled = true;
+  listEl.innerHTML = '';
+
+  try {
+    statusEl.textContent = '⏳ Eksik yazılar listeleniyor…';
+    const listResp = await fetch(`/admin/translations/missing-list?lang=${lang}`, {
+      headers: {'X-CSRFToken': CSRF}
+    });
+    const listData = await listResp.json();
+    if (listData.error) throw new Error(listData.error);
+
+    const total = listData.total;
+    if (total === 0) {
+      statusEl.innerHTML = `<div class="flash flash-success">✓ ${lang.toUpperCase()} dilinde eksik çeviri yok!</div>`;
+      btn.disabled = false;
+      return;
+    }
+
+    let success = 0, failed = 0;
+    for (let i = 0; i < listData.items.length; i++) {
+      const item = listData.items[i];
+      statusEl.innerHTML = `⏳ İşleniyor: <strong>${i+1} / ${total}</strong> — ${item.title}`;
+
+      try {
+        const r = await fetch(`/admin/translations/translate-one/${item.post_id}/${lang}`, {
+          method: 'POST',
+          headers: {'Content-Type':'application/json','X-CSRFToken': CSRF}
+        });
+        const data = await r.json();
+        if (data.error) throw new Error(data.error);
+
+        success++;
+        const li = document.createElement('li');
+        li.style.cssText = 'padding:.4rem 0; border-bottom:1px solid #f0f2f5; color:#16a34a;';
+        li.innerHTML = `✅ <strong>${item.title}</strong><br><small>→ <em>${data.title}</em> · <a href="${data.review_url}" target="_blank">İncele</a></small>`;
+        listEl.insertBefore(li, listEl.firstChild);
+      } catch (e) {
+        failed++;
+        const li = document.createElement('li');
+        li.style.cssText = 'padding:.4rem 0; border-bottom:1px solid #f0f2f5; color:#dc2626;';
+        li.innerHTML = `❌ <strong>${item.title}</strong> — <small>${e.message}</small>`;
+        listEl.insertBefore(li, listEl.firstChild);
+      }
+
+      // Rate limit'e takılmamak için kısa bekleme (Tier 1: 30k token/dk)
+      await new Promise(r => setTimeout(r, 1500));
+    }
+
+    statusEl.innerHTML = `<div class="flash flash-success">✓ Bitti: ${success}/${total} başarılı, ${failed} hata.</div>` +
+      `<p style="margin-top:.5rem;">Şimdi her çeviriyi gözden geçirebilirsin (yukarıdaki "İncele" linkleri) veya hepsini tek seferde yayına alabilirsin.</p>`;
+  } catch (e) {
+    statusEl.innerHTML = `<div class="flash flash-error">${e.message}</div>`;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function publishAll(lang, statusEl) {
+  if (!confirm(`Onay bekleyen TÜM ${lang.toUpperCase()} çevirilerini yayına almak istediğinden emin misin?\n\nGözden geçirmediysen önce birkaç tanesini incele.`)) return;
+
+  statusEl.textContent = '⏳ Yayına alınıyor…';
+  try {
+    const r = await fetch(`/admin/translations/publish-all/${lang}`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json','X-CSRFToken': CSRF}
+    });
+    const data = await r.json();
+    if (data.error) throw new Error(data.error);
+    statusEl.innerHTML = `<div class="flash flash-success">✓ ${data.published} ${lang.toUpperCase()} çevirisi yayına alındı.</div>`;
+    setTimeout(() => location.reload(), 1500);
+  } catch (e) {
+    statusEl.innerHTML = `<div class="flash flash-error">${e.message}</div>`;
+  }
+}
+
+document.getElementById('enBtn').addEventListener('click', () => bulkTranslate('en',
+  document.getElementById('enBtn'),
+  document.getElementById('enStatus'),
+  document.getElementById('enList')
+));
+document.getElementById('arBtn').addEventListener('click', () => bulkTranslate('ar',
+  document.getElementById('arBtn'),
+  document.getElementById('arStatus'),
+  document.getElementById('arList')
+));
+document.getElementById('enPublishBtn').addEventListener('click', () => publishAll('en',
+  document.getElementById('enStatus')
+));
+document.getElementById('arPublishBtn').addEventListener('click', () => publishAll('ar',
+  document.getElementById('arStatus')
+));
+</script>
 {% endblock %}

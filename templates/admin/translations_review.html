@@ -1,0 +1,30 @@
+{% extends "admin/base.html" %}
+{% block title %}Çeviri Onayları{% endblock %}
+{% block content %}
+<div class="admin-header">
+  <h1>Onay Bekleyen Çeviriler</h1>
+  <p class="muted">AI tarafından üretilen çeviriler, sen onaylayana kadar yayında değildir.</p>
+</div>
+
+<div class="admin-card">
+{% if pending %}
+<table class="admin-table">
+  <thead>
+    <tr><th>Başlık</th><th>Dil</th><th>Tarih</th><th></th></tr>
+  </thead>
+  <tbody>
+    {% for t in pending %}
+    <tr>
+      <td>{{ t.title }}</td>
+      <td><span class="badge">{{ t.language|upper }}</span></td>
+      <td><small>{{ t.updated_at.strftime('%d.%m.%Y %H:%M') }}</small></td>
+      <td><a href="{{ url_for('admin.post_edit', post_id=t.post_id, lang=t.language) }}" class="btn btn-primary btn-sm">Gözden Geçir</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">Onay bekleyen çeviri yok.</p>
+{% endif %}
+</div>
+{% endblock %}

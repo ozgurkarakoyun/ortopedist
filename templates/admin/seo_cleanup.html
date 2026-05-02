@@ -103,25 +103,60 @@ document.getElementById('fillBtn').addEventListener('click', async () => {
   const btn = document.getElementById('fillBtn');
   const status = document.getElementById('fillStatus');
   const list = document.getElementById('fillList');
-  if (!confirm('Eksik meta\'ları olan tüm yazılar için AI çağrısı yapılsın mı? Bu birkaç dakika sürer ve API kredi tüketir.')) return;
+  if (!confirm('Eksik meta\'ları olan tüm yazılar için AI çağrısı yapılsın mı?\n\nYazı başına ~5 saniye sürer (40 yazı için 3-4 dakika).\nİşlem sırasında tarayıcıyı kapatma.')) return;
 
   btn.disabled = true;
-  status.textContent = '⏳ AI çalışıyor… (yazı başına ~5 sn)';
   list.innerHTML = '';
 
   try {
-    const r = await fetch('{{ url_for("admin.seo_cleanup_fill_missing") }}', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json','X-CSRFToken': CSRF}
+    // 1. Önce eksik olan yazıların listesini al
+    status.textContent = '⏳ Eksik yazılar listeleniyor…';
+    const listResp = await fetch('{{ url_for("admin.seo_cleanup_missing_list") }}', {
+      headers: {'X-CSRFToken': CSRF}
     });
-    const data = await r.json();
-    if (data.error) throw new Error(data.error);
-    status.innerHTML = `<div class="flash flash-success">✓ Bitti: ${data.success}/${data.total} başarılı, ${data.failed} hata.</div>`;
-    list.innerHTML = data.items.map(item => {
-      const icon = item.status === 'ok' ? '✅' : '❌';
-      const color = item.status === 'ok' ? '#16a34a' : '#dc2626';
-      return `<li style="padding:.4rem 0; border-bottom:1px solid #f0f2f5; color:${color}">${icon} <strong>${item.title}</strong> — <small>${item.updated || item.error || ''}</small></li>`;
-    }).join('');
+    const listData = await listResp.json();
+    if (listData.error) throw new Error(listData.error);
+
+    const total = listData.total;
+    if (total === 0) {
+      status.innerHTML = '<div class="flash flash-success">✓ Eksik meta yok, hepsi dolu!</div>';
+      btn.disabled = false;
+      return;
+    }
+
+    // 2. Tek tek işle
+    let success = 0, failed = 0;
+    for (let i = 0; i < listData.items.length; i++) {
+      const item = listData.items[i];
+      status.innerHTML = `⏳ İşleniyor: <strong>${i+1} / ${total}</strong> — ${item.title}`;
+
+      try {
+        const r = await fetch(`/admin/seo-cleanup/fill-one/${item.id}`, {
+          method: 'POST',
+          headers: {'Content-Type':'application/json','X-CSRFToken': CSRF}
+        });
+        const data = await r.json();
+        if (data.error) throw new Error(data.error);
+
+        success++;
+        const li = document.createElement('li');
+        li.style.cssText = 'padding:.4rem 0; border-bottom:1px solid #f0f2f5; color:#16a34a;';
+        li.innerHTML = `✅ <strong>${item.title}</strong> — <small>${data.updated}</small>`;
+        list.insertBefore(li, list.firstChild);
+      } catch (e) {
+        failed++;
+        const li = document.createElement('li');
+        li.style.cssText = 'padding:.4rem 0; border-bottom:1px solid #f0f2f5; color:#dc2626;';
+        li.innerHTML = `❌ <strong>${item.title}</strong> — <small>${e.message}</small>`;
+        list.insertBefore(li, list.firstChild);
+      }
+
+      // Rate limit'e takılmamak için kısa bekleme
+      await new Promise(r => setTimeout(r, 500));
+    }
+
+    status.innerHTML = `<div class="flash flash-success">✓ Bitti: ${success}/${total} başarılı, ${failed} hata.</div>` +
+      `<p style="margin-top:.5rem;"><a href="/" target="_blank" class="btn btn-primary">→ Ana Sayfayı Kontrol Et</a></p>`;
   } catch (e) {
     status.innerHTML = `<div class="flash flash-error">${e.message}</div>`;
   } finally {

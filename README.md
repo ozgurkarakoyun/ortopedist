@@ -1,50 +1,39 @@
-# SEO Meta Düzeltmeleri
+# SEO Bakımı Timeout Düzeltmesi (v2)
 
-Tespit edilen 3 SEO sorununu çözer:
-1. Bazı yazılarda `<title>` etiketinde "None — Ortopedist" yazıyordu
-2. Ana sayfa kartlarında bazı yazıların özetinde "None" string'i görünüyordu
-3. Open Graph ve JSON-LD meta description'ları boştu
+## Sorun
 
-## Yaptığı
+İlk patch'te "AI ile Eksik Meta'ları Doldur" butonu **40 yazıyı tek istekte** işliyordu:
+- Backend: 3-4 dakika boyunca AI çağırıyor
+- Frontend: 60 saniye sonra Railway proxy timeout
+- JS: boş response alıp "JSON.parse: unexpected character" hatası
 
-### Şablon tarafı (kalıcı çözüm)
-- Yeni Jinja filter `|clean`: "None"/"null"/"undefined" string'lerini boş kabul eder
-- Yeni Jinja filter `|smart_description`: meta_description → excerpt → içeriğin ilk 160 karakterine kadar otomatik fallback yapar
-- Tüm public şablonlar bu filter'ı kullanır
+## Çözüm
 
-### Admin tarafı (mevcut bozuk veriyi düzelt)
-- Yeni sayfa: `/admin/seo-cleanup` — sol sidebar'da "🔧 SEO Bakımı" linki
-- 1. Adım: "None" string'lerini gerçek NULL'a çevir (ücretsiz, anlık)
-- 2. Adım: AI ile eksik meta_description ve excerpt'leri toplu doldur
+Endpoint **tekli** çalışacak şekilde bölündü:
+- `/admin/seo-cleanup/missing-list` (GET): eksik yazıların listesini döner
+- `/admin/seo-cleanup/fill-one/<id>` (POST): tek bir yazıyı işler (~3-5 sn)
 
-## Değişen Dosyalar
+JS yazıları **sırayla** çağırır, her biri için anlık ✅/❌ gösterir.
+İlerleme: "İşleniyor: 17 / 40 — Yazı başlığı" gibi.
+
+## Değişen 2 dosya
 
 ```
-app.py                              (clean + smart_description filter eklendi)
-routes/admin.py                     (3 yeni endpoint: seo_cleanup_page, normalize, fill_missing)
-templates/admin/base.html           (sidebar'a "SEO Bakımı" linki)
-templates/admin/seo_cleanup.html    (YENİ - bakım arayüzü)
-templates/public/index.html         (smart_description filter'ı kullanır)
-templates/public/post.html          (clean + smart_description filter'ı)
-templates/public/search.html        (smart_description filter'ı)
+routes/admin.py                     (3 endpoint - missing-list, fill-one, fill-missing deprecated)
+templates/admin/seo_cleanup.html    (yeni JS - sıralı işleme)
 ```
 
 ## Kurulum
 
 ```bash
 cd /yol/to/ortopedist
-unzip ~/Downloads/seo-fix-patch.zip -d /tmp/
+unzip ~/Downloads/seo-fix-v2.zip -d /tmp/
 
-cp /tmp/seo-fix-patch/app.py app.py
-cp /tmp/seo-fix-patch/routes/admin.py routes/admin.py
-cp /tmp/seo-fix-patch/templates/admin/base.html templates/admin/base.html
-cp /tmp/seo-fix-patch/templates/admin/seo_cleanup.html templates/admin/seo_cleanup.html
-cp /tmp/seo-fix-patch/templates/public/index.html templates/public/index.html
-cp /tmp/seo-fix-patch/templates/public/post.html templates/public/post.html
-cp /tmp/seo-fix-patch/templates/public/search.html templates/public/search.html
+cp /tmp/seo-fix-v2/routes/admin.py routes/admin.py
+cp /tmp/seo-fix-v2/templates/admin/seo_cleanup.html templates/admin/seo_cleanup.html
 
-git add app.py routes/admin.py templates/
-git commit -m "fix: SEO meta tag düzeltmeleri (None string sorunu)"
+git add routes/admin.py templates/admin/seo_cleanup.html
+git commit -m "fix: SEO bakım butonu timeout sorununu çöz - tek tek işle"
 git push
 ```
 
@@ -52,10 +41,11 @@ Railway redeploy bekle (~1-2 dk).
 
 ## Kullanım
 
-1. Admin'e gir: https://ortopedist.blog/admin
-2. Sol menü → **🔧 SEO Bakımı**
-3. **Adım 1**: "🧹 Bozuk String'leri Temizle" butonuna bas (ücretsiz, anlık)
-4. **Adım 2**: "🤖 AI ile Eksik Meta'ları Doldur" (~$0.50 / 40 yazı, 5 dk)
+Admin → 🔧 SEO Bakımı → "🤖 AI ile Eksik Meta'ları Doldur":
+- Önce kaç yazı eksik bulduğunu söyler
+- Sırayla her yazı için API çağrısı (~3-5 sn / yazı)
+- Her yazıdan sonra ✅ veya ❌ ile sonuç görünür
+- Tarayıcı sekmeyi açık bırak, kapama
 
-Adım 1'den sonra zaten ana sayfada "None" görünmeyecek (filter'lar fallback yapıyor).
-Adım 2 sonra yazıların kendi özel meta_description'ları olacak (Google için ideal).
+40 yazı için tahmini süre: 3-4 dakika
+40 yazı için tahmini maliyet: ~$0.50

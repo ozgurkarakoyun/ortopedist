@@ -598,22 +598,10 @@ def seo_cleanup_normalize():
     return jsonify({"ok": True, "fixed": fixed})
 
 
-@admin_bp.route("/seo-cleanup/fill-missing", methods=["POST"])
+@admin_bp.route("/seo-cleanup/missing-list", methods=["GET"])
 @login_required
-@limiter.limit("3 per hour")
-def seo_cleanup_fill_missing():
-    """
-    Meta_description ve excerpt'i eksik olan yazılar için AI ile doldurur.
-    Tek tek SEO endpoint'ine ihtiyaç bırakmadan toplu çalışır.
-    """
-    from services.seo import SEOGenerator
-
-    seo = SEOGenerator(
-        api_key=current_app.config["ANTHROPIC_API_KEY"],
-        model=current_app.config["AI_MODEL"],
-    )
-
-    # Yayında olan TR çevirileri içinde meta'sı eksik olanlar
+def seo_cleanup_missing_list():
+    """Eksik meta'sı olan yazıların ID + başlık listesini döner."""
     missing = db.session.query(PostTranslation).filter(
         PostTranslation.is_published == True,  # noqa: E712
         PostTranslation.language == "tr",
@@ -624,36 +612,54 @@ def seo_cleanup_fill_missing():
             db.func.length(db.func.coalesce(PostTranslation.excerpt, "")) < 30,
         ),
     ).all()
+    return jsonify({
+        "total": len(missing),
+        "items": [{"id": t.id, "title": t.title[:80]} for t in missing],
+    })
 
-    results = {"total": len(missing), "success": 0, "failed": 0, "items": []}
 
-    for t in missing:
-        try:
-            data = seo.generate(title=t.title, content=t.content or "", lang="tr")
-            updated = []
-            if not t.meta_title or len(t.meta_title) < 10:
-                t.meta_title = (data.get("meta_title") or "")[:255]
-                updated.append("meta_title")
-            if not t.meta_description or len(t.meta_description) < 50:
-                t.meta_description = (data.get("meta_description") or "")[:500]
-                updated.append("meta_desc")
-            if not t.excerpt or len(t.excerpt) < 30:
-                # Excerpt için meta_description'ın kısa hâlini kullan
-                t.excerpt = (data.get("meta_description") or data.get("structured_summary") or "")[:300]
-                updated.append("excerpt")
-            if not t.meta_keywords:
-                t.meta_keywords = (data.get("meta_keywords") or "")[:500]
-                updated.append("keywords")
-            db.session.commit()
-            results["success"] += 1
-            results["items"].append({
-                "status": "ok",
-                "title": t.title,
-                "updated": ", ".join(updated) or "(zaten doluydu)",
-            })
-        except Exception as e:
-            db.session.rollback()
-            results["failed"] += 1
-            results["items"].append({"status": "error", "title": t.title, "error": str(e)[:120]})
+@admin_bp.route("/seo-cleanup/fill-one/<int:translation_id>", methods=["POST"])
+@login_required
+@limiter.limit("100 per hour")
+def seo_cleanup_fill_one(translation_id):
+    """Tek bir yazının eksik meta'sını AI ile doldurur. JS bunu sırayla çağırır."""
+    from services.seo import SEOGenerator
 
-    return jsonify(results)
+    t = db.session.get(PostTranslation, translation_id)
+    if not t:
+        return jsonify({"error": "Çeviri bulunamadı"}), 404
+
+    try:
+        seo = SEOGenerator(
+            api_key=current_app.config["ANTHROPIC_API_KEY"],
+            model=current_app.config["AI_MODEL"],
+        )
+        data = seo.generate(title=t.title, content=t.content or "", lang=t.language)
+        updated = []
+        if not t.meta_title or len(t.meta_title) < 10:
+            t.meta_title = (data.get("meta_title") or "")[:255]
+            updated.append("title")
+        if not t.meta_description or len(t.meta_description) < 50:
+            t.meta_description = (data.get("meta_description") or "")[:500]
+            updated.append("desc")
+        if not t.excerpt or len(t.excerpt) < 30:
+            t.excerpt = (data.get("meta_description") or data.get("structured_summary") or "")[:300]
+            updated.append("excerpt")
+        if not t.meta_keywords:
+            t.meta_keywords = (data.get("meta_keywords") or "")[:500]
+            updated.append("keywords")
+        db.session.commit()
+        return jsonify({"ok": True, "updated": ", ".join(updated) or "(zaten doluydu)"})
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.exception(f"fill-one error for translation {translation_id}")
+        return jsonify({"error": str(e)[:200]}), 500
+
+
+# Eski endpoint geriye dönük uyumluluk için — kullanılmıyor artık
+@admin_bp.route("/seo-cleanup/fill-missing", methods=["POST"])
+@login_required
+def seo_cleanup_fill_missing_deprecated():
+    return jsonify({
+        "error": "Bu endpoint kaldırıldı. Yeni JS missing-list + fill-one kullanır.",
+    }), 410

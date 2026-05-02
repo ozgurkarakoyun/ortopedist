@@ -135,6 +135,8 @@ def create_app(config_class=Config):
             "google_site_verification": os.environ.get("GOOGLE_SITE_VERIFICATION", "").strip(),
             "bing_site_verification": os.environ.get("BING_SITE_VERIFICATION", "").strip(),
             "yandex_site_verification": os.environ.get("YANDEX_SITE_VERIFICATION", "").strip(),
+            # Google Analytics 4 (env var GA_MEASUREMENT_ID)
+            "ga_measurement_id": os.environ.get("GA_MEASUREMENT_ID", "").strip(),
         }
 
     # Jinja filter: 'None' string'ini ve boş değerleri temizler

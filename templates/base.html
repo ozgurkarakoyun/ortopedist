@@ -26,6 +26,20 @@
         href="{{ url_for('public.feed', lang=current_lang) if current_lang != 'tr' else url_for('public.feed') }}">
 
   {% block head_extra %}{% endblock %}
+
+  {# Google Analytics 4 (env var GA_MEASUREMENT_ID set edildiyse) #}
+  {% if ga_measurement_id and not request.path.startswith('/admin') %}
+  <script async src="https://www.googletagmanager.com/gtag/js?id={{ ga_measurement_id }}"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', '{{ ga_measurement_id }}', {
+      'anonymize_ip': true,
+      'page_path': window.location.pathname
+    });
+  </script>
+  {% endif %}
 </head>
 <body class="{{ 'rtl' if is_rtl else 'ltr' }}">
 

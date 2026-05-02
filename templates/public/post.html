@@ -19,19 +19,22 @@
   {% endif %}
 {% endfor %}
 
-<!-- JSON-LD Schema.org Article -->
+<!-- JSON-LD Schema.org Article (Physician @id'sine bağlı) -->
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
   "@type": "MedicalScholarlyArticle",
+  "@id": "{{ site_url }}{{ request.path }}#article",
   "headline": {{ translation.title|tojson }},
+  "url": "{{ site_url }}{{ request.path }}",
   "datePublished": "{{ (post.published_at or post.created_at).isoformat() }}",
   "dateModified": "{{ post.updated_at.isoformat() }}",
-  "author": {
-    "@type": "Person",
-    "name": "{{ author_name }}",
-    "jobTitle": "{% if current_lang == 'tr' %}Ortopedi ve Travmatoloji Uzmanı{% elif current_lang == 'en' %}Orthopedic Surgeon{% else %}اختصاصي جراحة العظام{% endif %}"
-  },
+  "author": {"@id": "{{ site_url }}/#physician"},
+  "publisher": {"@id": "{{ site_url }}/#physician"},
+  "isPartOf": {"@id": "{{ site_url }}/#website"},
+  "mainEntityOfPage": "{{ site_url }}{{ request.path }}",
+  {% if post.featured_image %}"image": "{{ post.featured_image if post.featured_image.startswith('http') else site_url + post.featured_image }}",{% endif %}
+  "inLanguage": "{{ current_lang }}",
   "description": {{ (translation|smart_description)|tojson }}
 }
 </script>

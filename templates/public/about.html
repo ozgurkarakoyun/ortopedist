@@ -1,34 +1,212 @@
 {% extends "base.html" %}
 {% block title %}{% if current_lang == 'tr' %}Hakkımda{% elif current_lang == 'en' %}About{% else %}عني{% endif %} — {{ site_name }}{% endblock %}
+{% block meta_description %}{% if current_lang == 'tr' %}Doç. Dr. Özgür Karakoyun — Ortopedi ve Travmatoloji uzmanı. Tekirdağ'da boy uzatma, deformite düzeltme, osseointegrasyon ve kaynamayan kırık tedavisi.{% elif current_lang == 'en' %}Assoc. Prof. Dr. Özgür Karakoyun — Orthopedic surgeon in Tekirdağ, Türkiye. Specialist in limb lengthening, deformity correction, osseointegration and non-union fracture treatment.{% else %}الأستاذ المشارك الدكتور أوزغور كاراكويون — اختصاصي جراحة العظام في تكيرداغ، تركيا.{% endif %}{% endblock %}
+
+{% block head_extra %}
+{# Schema.org Physician markup — Google Knowledge Panel için #}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Physician",
+  "@id": "https://ortopedist.blog/#physician",
+  "name": "Doç. Dr. Özgür Karakoyun",
+  "alternateName": "Assoc. Prof. Dr. Özgür Karakoyun",
+  "honorificPrefix": "Doç. Dr.",
+  "givenName": "Özgür",
+  "familyName": "Karakoyun",
+  "jobTitle": "Ortopedi ve Travmatoloji Uzmanı, Doçent Doktor",
+  "description": "Doç. Dr. Özgür Karakoyun — Ortopedi ve Travmatoloji uzmanı. Boy uzatma, deformite düzeltme, osseointegrasyon, kaynamayan kırık ve osteomyelit tedavisi alanlarında uzman. Tekirdağ'da özel muayenehane.",
+  "url": "https://ortopedist.blog/hakkimda",
+  "sameAs": [
+    "https://www.ozgurkarakoyun.com",
+    "https://www.osseointegra.com",
+    "https://www.instagram.com/dr.ozgurkarakoyun",
+    "https://www.instagram.com/ozgurkarakoyun"
+  ],
+  "medicalSpecialty": [
+    {"@type": "MedicalSpecialty", "name": "Orthopedic"},
+    {"@type": "MedicalSpecialty", "name": "Plastic Surgery"}
+  ],
+  "knowsAbout": [
+    "Limb Lengthening", "Boy Uzatma Ameliyatı",
+    "Deformity Correction", "Deformite Düzeltme",
+    "Osseointegration", "Osseointegrasyon",
+    "Non-union Fracture Treatment", "Kaynamayan Kırık Tedavisi",
+    "Osteomyelitis", "Osteomiyelit",
+    "Hip Arthroplasty", "Knee Arthroplasty",
+    "Pediatric Orthopedics", "Trauma Surgery"
+  ],
+  "alumniOf": [
+    {"@type": "EducationalOrganization", "name": "Marmara Üniversitesi İngilizce Tıp Fakültesi"},
+    {"@type": "EducationalOrganization", "name": "Şişli Etfal Eğitim ve Araştırma Hastanesi"}
+  ],
+  "hasCredential": [
+    {"@type": "EducationalOccupationalCredential", "credentialCategory": "Medical Doctor (MD)", "dateCreated": "2004"},
+    {"@type": "EducationalOccupationalCredential", "credentialCategory": "Specialist in Orthopedics and Traumatology", "dateCreated": "2010"},
+    {"@type": "EducationalOccupationalCredential", "credentialCategory": "Associate Professor (Doçent)", "dateCreated": "2016"}
+  ],
+  "address": {
+    "@type": "PostalAddress",
+    "addressLocality": "Tekirdağ",
+    "addressCountry": "TR"
+  },
+  "telephone": "+905459195413",
+  "availableLanguage": ["Turkish", "English"],
+  "worksFor": {
+    "@type": "MedicalClinic",
+    "@id": "https://ortopedist.blog/#clinic",
+    "name": "Doç. Dr. Özgür Karakoyun Muayenehanesi",
+    "address": {
+      "@type": "PostalAddress",
+      "addressLocality": "Tekirdağ",
+      "addressCountry": "TR"
+    },
+    "telephone": "+905459195413",
+    "url": "https://www.ozgurkarakoyun.com",
+    "medicalSpecialty": "Orthopedic"
+  }
+}
+</script>
+{% endblock %}
 
 {% block content %}
-<div class="container narrow page">
+<div class="container narrow page about-page">
   <h1>{% if current_lang == 'tr' %}Hakkımda{% elif current_lang == 'en' %}About{% else %}عني{% endif %}</h1>
 
   {% if current_lang == 'tr' %}
-  <p>Merhaba, ben Doç. Dr. Özgür Karakoyun. Ortopedi ve travmatoloji, kas iskelet sistemi
-  hastalıkları ve yaralanmalarıyla ilgilenen bir tıp dalıdır.</p>
-  <p>2004'te Marmara Üniversitesi İngilizce Tıp Fakültesi'nden mezun oldum. 2010'da
-  Şişli Etfal Eğitim ve Araştırma Hastanesi Ortopedi ve Travmatoloji Kliniği'nde uzmanlığımı
-  tamamladım. 2016'da doçentlik unvanı aldım. 2018'den bu yana Tekirdağ'da özel muayenehanemde
-  hizmet veriyorum.</p>
-  <p>Özel ilgi alanlarım: <strong>boy uzatma ameliyatları, deformite düzeltme, kaynamayan
-  kırık tedavisi, kemik iltihabı (osteomyelit) ve osseointegrasyon</strong>.</p>
+  <p class="lead">
+    <strong>Doç. Dr. Özgür Karakoyun</strong> — Ortopedi ve Travmatoloji Uzmanı.
+    Tekirdağ'da hizmet veren özel muayenehanemde, boy uzatma ameliyatları,
+    deformite düzeltme, kaynamayan kırık tedavisi ve osseointegrasyon konularında
+    uzmanlaşmış bir doktorum.
+  </p>
+
+  <h2>Eğitim ve Akademik Kariyer</h2>
+  <ul>
+    <li><strong>2004:</strong> Marmara Üniversitesi İngilizce Tıp Fakültesi'nden mezuniyet</li>
+    <li><strong>2010:</strong> Şişli Etfal Eğitim ve Araştırma Hastanesi Ortopedi ve Travmatoloji Kliniği — uzmanlık eğitimi</li>
+    <li><strong>2016:</strong> Doçentlik unvanı</li>
+    <li><strong>2018 — günümüz:</strong> Tekirdağ'da özel muayenehane</li>
+  </ul>
+
+  <h2>Uzmanlık Alanlarım</h2>
+  <ul>
+    <li><strong>Boy uzatma ameliyatları</strong> — kozmetik ve tedavi amaçlı</li>
+    <li><strong>Kemik deformitesi düzeltme</strong> — açısal ve rotasyonel deformiteler</li>
+    <li><strong>Kaynamayan kırık tedavisi</strong> (non-union)</li>
+    <li><strong>Osseointegrasyon</strong> — amputelerde implant uygulamaları</li>
+    <li><strong>Osteomiyelit (kemik iltihabı) tedavisi</strong></li>
+    <li><strong>Travmatoloji</strong> — kompleks kemik kırıkları</li>
+  </ul>
+
+  <h2>Akademik Çalışmalar</h2>
+  <p>26+ uluslararası hakemli yayın, 360'ı aşkın atıf. LLRS (Limb Lengthening and
+  Reconstruction Society) ve AAOS (American Academy of Orthopaedic Surgeons)'tan
+  uluslararası ödüller. Springer akademik kitap bölümü.</p>
+
+  <h2>İletişim</h2>
+  <p>📍 <strong>Adres:</strong> Tekirdağ, Türkiye<br>
+  📞 <strong>Randevu:</strong> <a href="tel:+905459195413">+90 545 919 5413</a><br>
+  🌐 <strong>Web:</strong> <a href="https://www.ozgurkarakoyun.com" rel="me">ozgurkarakoyun.com</a> ·
+  <a href="https://www.osseointegra.com" rel="me">osseointegra.com</a></p>
+
   {% elif current_lang == 'en' %}
-  <p>Hello, I'm Assoc. Prof. Dr. Özgür Karakoyun. Orthopedics and traumatology is the medical
-  branch dealing with musculoskeletal disorders and injuries.</p>
-  <p>I graduated from Marmara University Faculty of English Medicine in 2004. I completed my
-  residency in 2010 at Şişli Etfal Training and Research Hospital. I received the title of
-  Associate Professor in 2016 and have been running my private practice in Tekirdağ since 2018.</p>
-  <p>My special interests include: <strong>limb lengthening, deformity correction, non-union
-  fracture treatment, osteomyelitis, and osseointegration</strong>.</p>
+  <p class="lead">
+    <strong>Assoc. Prof. Dr. Özgür Karakoyun</strong> — Specialist in Orthopedics
+    and Traumatology. Operating from a private practice in Tekirdağ, Türkiye,
+    specialized in limb lengthening surgery, deformity correction, non-union
+    fracture treatment, and osseointegration.
+  </p>
+
+  <h2>Education and Academic Career</h2>
+  <ul>
+    <li><strong>2004:</strong> Graduated from Marmara University Faculty of English Medicine</li>
+    <li><strong>2010:</strong> Completed residency at Şişli Etfal Training and Research Hospital, Department of Orthopedics and Traumatology</li>
+    <li><strong>2016:</strong> Awarded Associate Professor (Doçent) title</li>
+    <li><strong>2018 — present:</strong> Private practice in Tekirdağ</li>
+  </ul>
+
+  <h2>Areas of Expertise</h2>
+  <ul>
+    <li><strong>Limb lengthening surgery</strong> — cosmetic and therapeutic</li>
+    <li><strong>Bone deformity correction</strong> — angular and rotational deformities</li>
+    <li><strong>Non-union fracture treatment</strong></li>
+    <li><strong>Osseointegration</strong> — implant applications for amputees</li>
+    <li><strong>Osteomyelitis (bone infection) treatment</strong></li>
+    <li><strong>Traumatology</strong> — complex bone fractures</li>
+  </ul>
+
+  <h2>Academic Work</h2>
+  <p>26+ international peer-reviewed publications with 360+ citations. International
+  awards from LLRS (Limb Lengthening and Reconstruction Society) and AAOS (American
+  Academy of Orthopaedic Surgeons). Springer academic book chapter.</p>
+
+  <h2>Contact</h2>
+  <p>📍 <strong>Address:</strong> Tekirdağ, Türkiye<br>
+  📞 <strong>Appointment:</strong> <a href="tel:+905459195413">+90 545 919 5413</a><br>
+  🌐 <strong>Web:</strong> <a href="https://www.ozgurkarakoyun.com" rel="me">ozgurkarakoyun.com</a> ·
+  <a href="https://www.osseointegra.com" rel="me">osseointegra.com</a></p>
+
   {% else %}
-  <p>مرحبًا، أنا الأستاذ المشارك الدكتور أوزغور كاراكويون. جراحة العظام والإصابات هي الفرع الطبي
-  الذي يتعامل مع اضطرابات وإصابات الجهاز العضلي الهيكلي.</p>
-  <p>تخرجت من كلية الطب الإنجليزية بجامعة مرمرة عام 2004. أكملت إقامتي في عام 2010. حصلت على
-  لقب أستاذ مشارك في عام 2016. أدير عيادتي الخاصة في تكيرداغ منذ عام 2018.</p>
-  <p>اهتماماتي الخاصة: <strong>إطالة الأطراف، تصحيح التشوهات، علاج الكسور غير الملتئمة،
-  التهاب العظم، والاندماج العظمي</strong>.</p>
+  <p class="lead">
+    <strong>الأستاذ المشارك الدكتور أوزغور كاراكويون</strong> — اختصاصي في جراحة العظام
+    والإصابات. أعمل في عيادتي الخاصة في تكيرداغ، تركيا، متخصص في جراحة إطالة الأطراف،
+    تصحيح التشوهات، علاج الكسور غير الملتئمة، والاندماج العظمي.
+  </p>
+
+  <h2>التعليم والمسيرة الأكاديمية</h2>
+  <ul>
+    <li><strong>2004:</strong> تخرجت من كلية الطب الإنجليزية بجامعة مرمرة</li>
+    <li><strong>2010:</strong> أكملت الإقامة في مستشفى شيشلي إتفال للتعليم والأبحاث</li>
+    <li><strong>2016:</strong> حصلت على لقب أستاذ مشارك (Doçent)</li>
+    <li><strong>2018 — حتى الآن:</strong> عيادة خاصة في تكيرداغ</li>
+  </ul>
+
+  <h2>مجالات الخبرة</h2>
+  <ul>
+    <li><strong>جراحة إطالة الأطراف</strong> — تجميلية وعلاجية</li>
+    <li><strong>تصحيح تشوهات العظام</strong></li>
+    <li><strong>علاج الكسور غير الملتئمة</strong></li>
+    <li><strong>الاندماج العظمي</strong> — زراعة الأطراف الاصطناعية لمبتوري الأطراف</li>
+    <li><strong>علاج التهاب العظم</strong></li>
+    <li><strong>جراحة الإصابات</strong> — الكسور المعقدة</li>
+  </ul>
+
+  <h2>الأعمال الأكاديمية</h2>
+  <p>26+ منشور دولي محكم، أكثر من 360 استشهاد. جوائز دولية من LLRS و AAOS.
+  فصل كتاب أكاديمي من Springer.</p>
+
+  <h2>اتصال</h2>
+  <p>📍 <strong>العنوان:</strong> تكيرداغ، تركيا<br>
+  📞 <strong>الموعد:</strong> <a href="tel:+905459195413">+90 545 919 5413</a><br>
+  🌐 <strong>الموقع:</strong> <a href="https://www.ozgurkarakoyun.com" rel="me">ozgurkarakoyun.com</a></p>
   {% endif %}
 </div>
+
+<style>
+.about-page h2 {
+  margin-top: 2rem;
+  font-family: var(--font-serif);
+  font-size: 1.4rem;
+  color: var(--color-primary);
+}
+body.rtl .about-page h2 { font-family: var(--font-arabic); }
+.about-page .lead {
+  font-size: 1.15rem;
+  line-height: 1.7;
+  color: var(--color-text);
+  border-left: 3px solid var(--color-primary);
+  padding-left: 1rem;
+  margin: 1.5rem 0 2rem;
+}
+body.rtl .about-page .lead {
+  border-left: 0;
+  border-right: 3px solid var(--color-primary);
+  padding-left: 0;
+  padding-right: 1rem;
+}
+.about-page ul { padding-left: 1.5rem; }
+body.rtl .about-page ul { padding-left: 0; padding-right: 1.5rem; }
+.about-page ul li { margin-bottom: 0.5rem; }
+</style>
 {% endblock %}

@@ -240,6 +240,17 @@ def create_app(config_class=Config):
     def healthz():
         return {"ok": True}, 200
 
+    # /favicon.ico kök URL'sini static yola yönlendir
+    @app.route("/favicon.ico")
+    def favicon():
+        from flask import send_from_directory
+        import os as _os
+        return send_from_directory(
+            _os.path.join(app.root_path, "static", "favicon"),
+            "favicon.ico",
+            mimetype="image/vnd.microsoft.icon",
+        )
+
     # SEO 301 yönlendirmeleri
     # 1. www.ortopedist.blog -> ortopedist.blog (canonical apex)
     # 2. Eski WordPress URL'leri (/YYYY/MM/DD/slug/) -> yeni URL'ler (/yazi/slug/)

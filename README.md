@@ -1,82 +1,97 @@
-# Toplu Çeviri Patch'i
+# Favicon Patch'i
 
-Tek tıkla 40 yazının EN ve AR çevirilerini AI ile üretir.
+"OK" monogramı (Özgür Karakoyun) — yeşil arka plan, beyaz metin.
+8 boyutta, modern + eski tarayıcı + iOS + Android tüm cihazlar için tam destek.
 
-## Sayfalar
-
-### 🌍 Toplu Çeviri (yeni sayfa: /admin/translations)
-- Mevcut durumu gösterir (TR/EN/AR sayıları)
-- "Eksik EN Çevirilerini Üret" butonu
-- "Eksik AR Çevirilerini Üret" butonu
-- "Yayına Al" toplu butonu
-
-### 📋 Onay Bekleyenler (eski sayfa, yeniden adlandırıldı: /admin/translations/review)
-- Tek tek inceleme arayüzü
-- Sayfa içeriği değişmedi, sadece URL değişti
-
-## Akış
-
-1. **Üret:** Buton → AI tüm eksik çevirileri TASLAK olarak oluşturur
-2. **Gözden geçir:** Her çeviri "Onay Bekleyen" durumda. Birkaç tanesini incele
-3. **Yayına al:** Toplu yayın butonu veya tek tek admin panelden
-
-## Güvenlik
-
-- Çeviriler **otomatik yayına alınmaz** (`is_published=False`)
-- `ai_review_pending=True` olarak işaretlenir
-- Bu önemli — özellikle tıbbi terimlerin doğruluğu için manuel kontrol gerek
-- Çeviri kaydı, mevcut tek-tek çeviri endpoint'iyle aynı `Translator` servisini kullanır
-
-## Maliyet ve Süre
-
-| | Birim | 40 yazı × 2 dil = 80 |
-|---|---|---|
-| Maliyet | ~$0.04-0.06 / çeviri | ~$3.20-4.80 |
-| Süre | ~10-15 sn / çeviri (+1.5 sn rate limit) | ~15-20 dk |
-
-## Değişen 4 dosya
+## Üretilen Dosyalar
 
 ```
-routes/admin.py                            (4 yeni endpoint)
-templates/admin/base.html                  (sidebar linki güncellendi)
-templates/admin/translations.html          (YENİ - toplu çeviri arayüzü)
-templates/admin/translations_review.html   (YENİDEN ADLANDIRILDI - eski tek-tek inceleme)
+static/favicon/
+├── favicon.svg            (385 B)   ← Modern tarayıcılar (vector, her boyutta keskin)
+├── favicon.ico            (1.7 KB)  ← IE, Edge eski, multi-size
+├── favicon-16.png         (584 B)   ← 16×16, optimize ayrı versiyon (daha okunaklı)
+├── favicon-32.png         (1.1 KB)  ← Browser tab
+├── favicon-96.png         (3.5 KB)  ← Yer imi, geniş tab
+├── icon-192.png           (7.5 KB)  ← Android home screen
+├── icon-512.png           (21 KB)   ← Splash screen, PWA
+├── apple-touch-icon.png   (7 KB)    ← iOS home screen (180×180)
+└── manifest.json          (567 B)   ← PWA: name, theme color, icons
+```
+
+## Eklenen base.html'e
+
+7 link tag'i:
+- SVG favicon (modern)
+- PNG 32×32 ve 16×16
+- favicon.ico (eski tarayıcı)
+- apple-touch-icon (iOS)
+- manifest.json (PWA, Android)
+- theme-color meta (mobil tarayıcı bar rengi)
+
+## Eklenen app.py'ye
+
+- `/favicon.ico` route'u → kök URL'ye gelen istekler artık 404 yerine doğrudan ICO dosyasına yönlenir.
+  Bu logs'ta görünen `/favicon.ico 404` hatasını sonsuza dek bitirir.
+
+## Değişen / Eklenen Dosyalar
+
+```
+app.py                                  (favicon route eklendi)
+templates/base.html                     (head'e 7 favicon link)
+static/favicon/                         (YENİ klasör, 9 dosya)
 ```
 
 ## Kurulum
 
 ```bash
 cd /yol/to/ortopedist
-unzip ~/Downloads/bulk-translate-patch.zip -d /tmp/
+unzip ~/Downloads/favicon-patch.zip -d /tmp/
 
-# Eski translations.html'i yeniden adlandır (eğer hâlâ duruyorsa)
-[ -f templates/admin/translations_review.html ] || mv templates/admin/translations.html templates/admin/translations_review.html.bak 2>/dev/null
+# Static dosyaları kopyala
+mkdir -p static/favicon
+cp /tmp/favicon-patch/static/favicon/* static/favicon/
 
-# Yeni dosyaları kopyala
-cp /tmp/bulk-translate-patch/routes/admin.py routes/admin.py
-cp /tmp/bulk-translate-patch/templates/admin/base.html templates/admin/base.html
-cp /tmp/bulk-translate-patch/templates/admin/translations.html templates/admin/translations.html
-cp /tmp/bulk-translate-patch/templates/admin/translations_review.html templates/admin/translations_review.html
+# Kod değişiklikleri
+cp /tmp/favicon-patch/app.py app.py
+cp /tmp/favicon-patch/templates/base.html templates/base.html
 
-git add routes/admin.py templates/admin/
-git commit -m "feat: toplu çeviri sayfası (EN/AR), onay bekleyen yeni URL"
+git add app.py templates/base.html static/favicon/
+git commit -m "feat: favicon ve PWA manifest (OK monogramı)"
 git push
 ```
 
-## Kullanım
+Railway redeploy bekle (~1-2 dk).
 
-1. Admin'e gir → Sol menü → **🌍 Toplu Çeviri**
-2. **🇬🇧 Eksik EN Çevirilerini Üret** butonuna bas
-3. ~10 dakika bekle (yazı başına ~10-15 sn × 40 yazı)
-4. Sırayla her yazının ✅ olduğunu gör
-5. Bitince aynı şeyi **🇸🇦 AR** için de yap
-6. **İncele** linkleriyle birkaç çeviriyi gözden geçir
-7. **✅ Yayına Al** butonuyla toplu yayın
+## Doğrulama
 
-## ÖNEMLİ: Önce Anthropic kredi yükle
+### 1. Browser tab
+- https://ortopedist.blog aç
+- Tarayıcı sekmesinde **küçük yeşil 'OK' simgesi** görünmeli
+- Ctrl+F5 ile yenile (eski cache'i temizle)
 
-Mevcut hata "credit balance too low" diyor. Çevirilerin başlamadan önce:
+### 2. Yer imine ekle
+- Ctrl+D / Cmd+D
+- Yer imi simgesi olarak yeşil OK görünmeli
 
-https://console.anthropic.com/settings/billing → minimum $10 yükle
+### 3. iOS Safari
+- iPhone'da Safari ile aç
+- Share → Add to Home Screen
+- Ana ekrandaki ikon yeşil OK olarak görünür
 
-40 yazı × 2 dil = 80 çeviri tahmini $4-5 arası tutacak.
+### 4. Android Chrome
+- Chrome'da menüden "Install app" veya "Add to Home Screen"
+- App olarak kurulur, Splash screen yeşil
+
+### 5. Logs kontrol
+- Railway logs'ta artık `/favicon.ico 404` görmemeli
+- Yerine `/favicon.ico 200` veya hiç görünmemeli (cache'lenir)
+
+### 6. Online test
+https://realfavicongenerator.net/favicon_checker
+URL: https://ortopedist.blog
+Tüm platformlar (Win, Mac, iOS, Android, Twitter, Slack) için ✓ alman lazım
+
+## Theme Color
+
+Mobil tarayıcılarda (Android Chrome, Safari) URL bar rengi `#1A6E63` (teal) olur.
+Site temanla bütünleşir, profesyonel hava verir.

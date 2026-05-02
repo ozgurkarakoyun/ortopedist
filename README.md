@@ -1,97 +1,70 @@
-# Favicon Patch'i
+# Toplu Kapak Üretimi Patch'i
 
-"OK" monogramı (Özgür Karakoyun) — yeşil arka plan, beyaz metin.
-8 boyutta, modern + eski tarayıcı + iOS + Android tüm cihazlar için tam destek.
+Kapağı olmayan yayında yazılar için **tek tıkla AI kapak üretir**.
+SEO Bakımı ve Toplu Çeviri ile aynı yapı: tek tek işle, anlık progress.
 
-## Üretilen Dosyalar
+## Yeni Sayfa: 🎨 Toplu Kapak
 
-```
-static/favicon/
-├── favicon.svg            (385 B)   ← Modern tarayıcılar (vector, her boyutta keskin)
-├── favicon.ico            (1.7 KB)  ← IE, Edge eski, multi-size
-├── favicon-16.png         (584 B)   ← 16×16, optimize ayrı versiyon (daha okunaklı)
-├── favicon-32.png         (1.1 KB)  ← Browser tab
-├── favicon-96.png         (3.5 KB)  ← Yer imi, geniş tab
-├── icon-192.png           (7.5 KB)  ← Android home screen
-├── icon-512.png           (21 KB)   ← Splash screen, PWA
-├── apple-touch-icon.png   (7 KB)    ← iOS home screen (180×180)
-└── manifest.json          (567 B)   ← PWA: name, theme color, icons
-```
+Sol sidebar'da **"🎨 Toplu Kapak"** linki.
 
-## Eklenen base.html'e
+İçerik:
+- 📊 Durum kartları: Yayında / Kapaklı / Eksik sayıları
+- 🤖 "Tüm Eksik Kapakları Üret" butonu — eksik sayısını gösterir
+- 💰 Anlık maliyet hesabı (eksik × $0.04)
+- 📋 İşlem listesi: her üretilen kapağın **küçük preview'ı** ile
 
-7 link tag'i:
-- SVG favicon (modern)
-- PNG 32×32 ve 16×16
-- favicon.ico (eski tarayıcı)
-- apple-touch-icon (iOS)
-- manifest.json (PWA, Android)
-- theme-color meta (mobil tarayıcı bar rengi)
+## Akış
 
-## Eklenen app.py'ye
+1. Buton → Eksik liste alınır
+2. Tek tek `/api/posts/<id>/generate-cover` çağrılır (mevcut endpoint)
+3. Her kapak üretildikçe **görsel önizleme** ile listeye eklenir
+4. Yazıyı görüntüleme + düzenleme linkleri her kapağın yanında
 
-- `/favicon.ico` route'u → kök URL'ye gelen istekler artık 404 yerine doğrudan ICO dosyasına yönlenir.
-  Bu logs'ta görünen `/favicon.ico 404` hatasını sonsuza dek bitirir.
+## Zaten Mevcut: Yazı bazında üretim
 
-## Değişen / Eklenen Dosyalar
+Bu patch yeni endpoint EKLEMİYOR, sadece toplu çalışan UI ekliyor.
+Mevcut `/api/posts/<id>/generate-cover` endpoint'i kullanılıyor.
+Yani yazı düzenleme sayfasındaki "🎨 AI Kapak Üret" butonu çalışmaya devam eder.
+
+## Değişen 3 dosya
 
 ```
-app.py                                  (favicon route eklendi)
-templates/base.html                     (head'e 7 favicon link)
-static/favicon/                         (YENİ klasör, 9 dosya)
+routes/admin.py                       (2 yeni endpoint: covers_page, missing-list)
+templates/admin/base.html             (sidebar'a yeni link)
+templates/admin/covers.html           (YENİ - toplu üretim arayüzü)
 ```
 
 ## Kurulum
 
 ```bash
 cd /yol/to/ortopedist
-unzip ~/Downloads/favicon-patch.zip -d /tmp/
+unzip ~/Downloads/bulk-covers-patch.zip -d /tmp/
 
-# Static dosyaları kopyala
-mkdir -p static/favicon
-cp /tmp/favicon-patch/static/favicon/* static/favicon/
+cp /tmp/bulk-covers-patch/routes/admin.py routes/admin.py
+cp /tmp/bulk-covers-patch/templates/admin/base.html templates/admin/base.html
+cp /tmp/bulk-covers-patch/templates/admin/covers.html templates/admin/covers.html
 
-# Kod değişiklikleri
-cp /tmp/favicon-patch/app.py app.py
-cp /tmp/favicon-patch/templates/base.html templates/base.html
-
-git add app.py templates/base.html static/favicon/
-git commit -m "feat: favicon ve PWA manifest (OK monogramı)"
+git add routes/admin.py templates/admin/
+git commit -m "feat: toplu kapak üretim sayfası"
 git push
 ```
 
 Railway redeploy bekle (~1-2 dk).
 
-## Doğrulama
+## Kullanım
 
-### 1. Browser tab
-- https://ortopedist.blog aç
-- Tarayıcı sekmesinde **küçük yeşil 'OK' simgesi** görünmeli
-- Ctrl+F5 ile yenile (eski cache'i temizle)
+1. Admin → sol menü → **🎨 Toplu Kapak**
+2. "Eksik Kapağı Olan: X" sayısını gör
+3. **🎨 Tüm Eksik Kapakları Üret (X)** butonuna bas
+4. Her yazıdan sonra ekranda **preview ile** görmen lazım:
+   - "İşleniyor: 5 / 12 — Yazı başlığı"
+   - Üretilen kapağın küçük önizlemesi listede
 
-### 2. Yer imine ekle
-- Ctrl+D / Cmd+D
-- Yer imi simgesi olarak yeşil OK görünmeli
+## Maliyet
 
-### 3. iOS Safari
-- iPhone'da Safari ile aç
-- Share → Add to Home Screen
-- Ana ekrandaki ikon yeşil OK olarak görünür
+Her kapak yaklaşık **$0.04** (OpenAI gpt-image-1, medium quality).
+12 eksik kapak → ~$0.48
+40 yazıdan tümü eksik → ~$1.60
 
-### 4. Android Chrome
-- Chrome'da menüden "Install app" veya "Add to Home Screen"
-- App olarak kurulur, Splash screen yeşil
-
-### 5. Logs kontrol
-- Railway logs'ta artık `/favicon.ico 404` görmemeli
-- Yerine `/favicon.ico 200` veya hiç görünmemeli (cache'lenir)
-
-### 6. Online test
-https://realfavicongenerator.net/favicon_checker
-URL: https://ortopedist.blog
-Tüm platformlar (Win, Mac, iOS, Android, Twitter, Slack) için ✓ alman lazım
-
-## Theme Color
-
-Mobil tarayıcılarda (Android Chrome, Safari) URL bar rengi `#1A6E63` (teal) olur.
-Site temanla bütünleşir, profesyonel hava verir.
+OpenAI kredinden harcanır (Anthropic'ten ayrı). Yetersiz krediyse:
+https://platform.openai.com/settings/organization/billing

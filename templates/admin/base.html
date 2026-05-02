@@ -38,6 +38,9 @@
     <a href="{{ url_for('admin.seo_cleanup_page') }}" class="{% if 'seo_cleanup' in (request.endpoint or '') %}active{% endif %}">
       <span>🔧</span> SEO Bakımı
     </a>
+    <a href="{{ url_for('admin.covers_page') }}" class="{% if 'covers' in (request.endpoint or '') %}active{% endif %}">
+      <span>🎨</span> Toplu Kapak
+    </a>
     <hr>
     <a href="{{ url_for('public.index') }}" target="_blank">
       <span>🔗</span> Siteye Git

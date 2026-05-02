@@ -820,3 +820,56 @@ def translations_publish_all(lang):
         count += 1
     db.session.commit()
     return jsonify({"ok": True, "published": count, "lang": lang})
+
+
+# --- Toplu Kapak Üretimi -----------------------------------------------------
+
+@admin_bp.route("/covers")
+@login_required
+def covers_page():
+    """Toplu AI kapak görseli üretim arayüzü."""
+    # Yayında olan yazılar
+    total_posts = db.session.query(Post).filter(
+        Post.status == "published"
+    ).count()
+
+    # Kapağı olanlar
+    with_cover = db.session.query(Post).filter(
+        Post.status == "published",
+        Post.featured_image.isnot(None),
+        db.func.length(db.func.coalesce(Post.featured_image, "")) > 5,
+    ).count()
+
+    return render_template(
+        "admin/covers.html",
+        total_posts=total_posts,
+        with_cover=with_cover,
+        without_cover=total_posts - with_cover,
+    )
+
+
+@admin_bp.route("/covers/missing-list")
+@login_required
+def covers_missing_list():
+    """Kapağı olmayan yayında yazıları listeler."""
+    missing = db.session.query(Post).filter(
+        Post.status == "published",
+        db.or_(
+            Post.featured_image.is_(None),
+            db.func.length(db.func.coalesce(Post.featured_image, "")) < 5,
+        ),
+    ).order_by(Post.published_at.desc()).all()
+
+    items = []
+    for p in missing:
+        # TR çeviriden başlık al
+        tr = next((t for t in p.translations if t.language == "tr"), None)
+        if not tr:
+            continue
+        items.append({
+            "post_id": p.id,
+            "title": tr.title[:80] if tr.title else "(Başlıksız)",
+            "slug": p.slug,
+        })
+
+    return jsonify({"total": len(items), "items": items})

@@ -1,0 +1,145 @@
+{% extends "admin/base.html" %}
+{% block title %}Toplu Kapak Üretimi{% endblock %}
+{% block content %}
+
+<div class="admin-header">
+  <h1>🎨 Toplu Kapak Üretimi</h1>
+</div>
+
+<div class="admin-card">
+  <h2>📊 Mevcut Durum</h2>
+  <div class="stat-grid" style="margin-top:1rem;">
+    <div class="stat-card">
+      <div class="stat-num">{{ total_posts }}</div>
+      <div class="stat-label">Yayında Yazı</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num">{{ with_cover }}</div>
+      <div class="stat-label">✓ Kapağı Olan</div>
+    </div>
+    <div class="stat-card {% if without_cover %}highlight{% endif %}">
+      <div class="stat-num">{{ without_cover }}</div>
+      <div class="stat-label">⚠ Kapağı Olmayan</div>
+    </div>
+  </div>
+</div>
+
+<div class="admin-card">
+  <h2>🤖 AI Kapak Üretimi</h2>
+  <p class="muted">
+    Kapağı olmayan yazılar için <strong>Claude</strong> başlığa göre güvenli prompt
+    oluşturur, <strong>OpenAI</strong> görseli üretir, otomatik kapak olarak atanır.
+  </p>
+  <p class="muted">
+    <strong>Tahmini süre:</strong> Kapak başına ~30-60 saniye<br>
+    <strong>Tahmini maliyet:</strong> ~$0.04 / kapak (medium quality, OpenAI gpt-image-1)<br>
+    <strong>Bütçe örneği:</strong> {{ without_cover }} eksik kapak × $0.04 = ~${{ "%.2f"|format(without_cover * 0.04) }}
+  </p>
+
+  {% if without_cover > 0 %}
+  <button id="bulkBtn" class="btn btn-primary">🎨 Tüm Eksik Kapakları Üret ({{ without_cover }})</button>
+  {% else %}
+  <p style="margin-top:1rem;"><strong>✓ Tüm yazıların kapağı var!</strong></p>
+  {% endif %}
+  <div id="bulkStatus" class="muted small" style="margin-top:.75rem;"></div>
+  <ul id="bulkList" style="list-style:none; padding:0; margin-top:1rem; max-height:600px; overflow-y:auto; font-size:.875rem;"></ul>
+</div>
+
+<div class="admin-card">
+  <h2>💡 Notlar</h2>
+  <ul style="margin-top:.5rem; line-height:1.7;">
+    <li>İşlem sırasında <strong>tarayıcı sekmesini açık tut</strong> — kapatırsan yarıda kalır (kalanları sonra tekrar üretebilirsin)</li>
+    <li>Üretim sırasında ana sayfaya bakıp ilerlemeyi gözlemleyebilirsin</li>
+    <li>Beğenmediğin kapağı yazı düzenleme sayfasından <strong>tek tıkla yeniden ürettirebilirsin</strong></li>
+    <li>Kapaklar Volume'da kalıcı saklanır, redeploy'da silinmez</li>
+  </ul>
+</div>
+
+<script>
+const CSRF = "{{ csrf_token() }}";
+
+document.getElementById('bulkBtn')?.addEventListener('click', async () => {
+  const btn = document.getElementById('bulkBtn');
+  const statusEl = document.getElementById('bulkStatus');
+  const listEl = document.getElementById('bulkList');
+
+  if (!confirm(
+    'Tüm eksik kapaklar için AI çağrısı yapılsın mı?\n\n' +
+    'Kapak başına ~30-60 saniye sürer.\n' +
+    'OpenAI kredinden harcanır.\n\n' +
+    'İşlem sırasında tarayıcı sekmesini açık tut.'
+  )) return;
+
+  btn.disabled = true;
+  listEl.innerHTML = '';
+
+  try {
+    statusEl.textContent = '⏳ Eksik kapaklı yazılar listeleniyor…';
+    const listResp = await fetch('/admin/covers/missing-list', {
+      headers: {'X-CSRFToken': CSRF}
+    });
+    const listData = await listResp.json();
+    if (listData.error) throw new Error(listData.error);
+
+    const total = listData.total;
+    if (total === 0) {
+      statusEl.innerHTML = '<div class="flash flash-success">✓ Eksik kapak yok!</div>';
+      btn.disabled = false;
+      return;
+    }
+
+    let success = 0, failed = 0;
+    for (let i = 0; i < listData.items.length; i++) {
+      const item = listData.items[i];
+      statusEl.innerHTML = `⏳ İşleniyor: <strong>${i+1} / ${total}</strong> — ${item.title}<br><small>(her biri ~30-60 sn sürer)</small>`;
+
+      try {
+        const r = await fetch(`/api/posts/${item.post_id}/generate-cover`, {
+          method: 'POST',
+          headers: {'Content-Type':'application/json','X-CSRFToken': CSRF},
+          body: JSON.stringify({lang: 'tr', save_as_cover: true, quality: 'medium'})
+        });
+        const data = await r.json();
+        if (data.error) throw new Error(data.error);
+
+        success++;
+        const li = document.createElement('li');
+        li.style.cssText = 'padding:.6rem; border:1px solid var(--border, #e6e8ed); border-radius:8px; margin-bottom:.5rem; display:flex; gap:.75rem; align-items:center;';
+        li.innerHTML = `
+          <img src="${data.url}" style="width:80px; height:54px; object-fit:cover; border-radius:4px;">
+          <div style="flex:1;">
+            <strong style="color:#16a34a;">✅ ${item.title}</strong><br>
+            <small><a href="/yazi/${item.slug}" target="_blank">Yazıyı görüntüle</a> ·
+            <a href="/admin/posts/${item.post_id}/edit" target="_blank">Düzenle</a> ·
+            ${(data.size_bytes/1024).toFixed(0)} KB</small>
+          </div>
+        `;
+        listEl.insertBefore(li, listEl.firstChild);
+      } catch (e) {
+        failed++;
+        const li = document.createElement('li');
+        li.style.cssText = 'padding:.5rem; border-bottom:1px solid #f0f2f5; color:#dc2626;';
+        li.innerHTML = `❌ <strong>${item.title}</strong> — <small>${e.message}</small>`;
+        listEl.insertBefore(li, listEl.firstChild);
+      }
+
+      // OpenAI rate limit'e takılmamak için ufak bekleme
+      await new Promise(r => setTimeout(r, 1000));
+    }
+
+    statusEl.innerHTML = `
+      <div class="flash flash-success">
+        ✓ Bitti: ${success}/${total} başarılı, ${failed} hata.
+      </div>
+      <p style="margin-top:.5rem;">
+        <a href="/" target="_blank" class="btn btn-primary">→ Ana Sayfayı Kontrol Et</a>
+      </p>
+    `;
+  } catch (e) {
+    statusEl.innerHTML = `<div class="flash flash-error">${e.message}</div>`;
+  } finally {
+    btn.disabled = false;
+  }
+});
+</script>
+{% endblock %}

@@ -133,6 +133,38 @@ def create_app(config_class=Config):
             "is_rtl": current_lang == "ar",
         }
 
+    # Jinja filter: 'None' string'ini ve boş değerleri temizler
+    # Kullanım: {{ value|clean }}  -> None, "None", "null" veya boşsa "" döner
+    @app.template_filter("clean")
+    def _clean_filter(value):
+        if value is None:
+            return ""
+        s = str(value).strip()
+        if s.lower() in ("none", "null", "undefined", "nan"):
+            return ""
+        return s
+
+    # Akıllı meta açıklama: meta_description -> excerpt -> içeriğin ilk 160 karakteri
+    @app.template_filter("smart_description")
+    def _smart_description(translation, max_len=160):
+        if not translation:
+            return ""
+        for field in ("meta_description", "excerpt"):
+            v = getattr(translation, field, None)
+            if v and str(v).strip().lower() not in ("none", "null", ""):
+                s = str(v).strip()
+                return s[:max_len]
+        # Son çare: markdown içeriğin ilk N karakteri
+        content = getattr(translation, "content", "") or ""
+        # Markdown başlıklarını ve özel karakterleri temizle
+        import re as _re
+        clean = _re.sub(r"^#+\s*", "", content, flags=_re.MULTILINE)
+        clean = _re.sub(r"[#*`_\[\]\(\)]", "", clean)
+        clean = _re.sub(r"\s+", " ", clean).strip()
+        if len(clean) > max_len:
+            clean = clean[:max_len].rsplit(" ", 1)[0] + "…"
+        return clean
+
     # Şablonlardan kullanılacak: lang_url('en') -> mevcut sayfanın EN versiyonu
     @app.context_processor
     def inject_lang_url():
@@ -201,6 +233,45 @@ def create_app(config_class=Config):
     @app.route("/healthz")
     def healthz():
         return {"ok": True}, 200
+
+    # SEO 301 yönlendirmeleri
+    # 1. www.ortopedist.blog -> ortopedist.blog (canonical apex)
+    # 2. Eski WordPress URL'leri (/YYYY/MM/DD/slug/) -> yeni URL'ler (/yazi/slug/)
+    import re as _re
+    _wp_url_pattern = _re.compile(r"^/(\d{4})/(\d{2})/(\d{2})/([^/]+)/?$")
+
+    @app.before_request
+    def seo_redirects():
+        from flask import redirect, request as _req
+
+        # /healthz, /static/, /api/ gibi yolları es geç (Railway healthcheck breaks etmesin)
+        path = _req.path or "/"
+        if path.startswith(("/healthz", "/static/", "/api/", "/admin/")):
+            return None
+
+        # 1) www -> apex redirect
+        host = (_req.host or "").lower()
+        if host.startswith("www."):
+            apex = host[4:]  # "www." soyu
+            new_url = f"https://{apex}{_req.full_path}".rstrip("?")
+            return redirect(new_url, code=301)
+
+        # 2) Eski WordPress URL'lerini yeni URL'lere yönlendir
+        m = _wp_url_pattern.match(path)
+        if m:
+            slug = m.group(4)
+            # DB'den bu slug var mı kontrol et
+            try:
+                from models import Post
+                post = db.session.query(Post).filter_by(slug=slug).first()
+                if post:
+                    return redirect(f"/yazi/{slug}", code=301)
+            except Exception:
+                pass
+            # Eski URL'de slug yoksa (silinmiş yazı vb.), ana sayfaya 301
+            return redirect("/", code=301)
+
+        return None
 
     # İlk deploy'da tabloları otomatik oluştur (idempotent)
     with app.app_context():

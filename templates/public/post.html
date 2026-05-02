@@ -1,12 +1,12 @@
 {% extends "base.html" %}
 
-{% block title %}{{ translation.meta_title or translation.title }} — {{ site_name }}{% endblock %}
-{% block meta_description %}{{ translation.meta_description or translation.excerpt or '' }}{% endblock %}
+{% block title %}{{ translation.meta_title|clean or translation.title|clean }} — {{ site_name }}{% endblock %}
+{% block meta_description %}{{ translation|smart_description }}{% endblock %}
 
 {% block meta_extra %}
 {% if translation.meta_keywords %}<meta name="keywords" content="{{ translation.meta_keywords }}">{% endif %}
-<meta property="og:title" content="{{ translation.meta_title or translation.title }}">
-<meta property="og:description" content="{{ translation.meta_description or translation.excerpt or '' }}">
+<meta property="og:title" content="{{ translation.meta_title|clean or translation.title|clean }}">
+<meta property="og:description" content="{{ translation|smart_description }}">
 <meta property="og:type" content="article">
 <meta property="og:locale" content="{{ {'tr':'tr_TR','en':'en_US','ar':'ar_AR'}[current_lang] }}">
 {% if post.featured_image %}<meta property="og:image" content="{{ post.featured_image }}">{% endif %}
@@ -32,7 +32,7 @@
     "name": "{{ author_name }}",
     "jobTitle": "{% if current_lang == 'tr' %}Ortopedi ve Travmatoloji Uzmanı{% elif current_lang == 'en' %}Orthopedic Surgeon{% else %}اختصاصي جراحة العظام{% endif %}"
   },
-  "description": {{ (translation.meta_description or translation.excerpt or '')|tojson }}
+  "description": {{ (translation|smart_description)|tojson }}
 }
 </script>
 {% endblock %}
@@ -92,7 +92,8 @@
       {% if rt %}
       <a href="{% if current_lang == 'tr' %}{{ url_for('public.post_tr', slug=r.slug) }}{% else %}{{ url_for('public.post_' + current_lang, slug=r.slug) }}{% endif %}" class="related-card">
         <h4>{{ rt.title }}</h4>
-        {% if rt.excerpt %}<p>{{ rt.excerpt[:120] }}…</p>{% endif %}
+        {% set safe_excerpt = rt|smart_description(120) %}
+        {% if safe_excerpt %}<p>{{ safe_excerpt }}…</p>{% endif %}
       </a>
       {% endif %}
     {% endfor %}

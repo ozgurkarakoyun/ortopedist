@@ -1,0 +1,132 @@
+{% extends "admin/base.html" %}
+{% block title %}SEO Bakımı{% endblock %}
+{% block content %}
+
+<div class="admin-header">
+  <h1>🔧 SEO Bakımı</h1>
+</div>
+
+<div class="admin-card">
+  <h2>📊 Mevcut Durum</h2>
+  <div class="stat-grid" style="margin-top:1rem;">
+    <div class="stat-card {% if bad_meta_title %}highlight{% endif %}">
+      <div class="stat-num">{{ bad_meta_title|length }}</div>
+      <div class="stat-label">Eksik Meta Title</div>
+    </div>
+    <div class="stat-card {% if bad_meta_desc %}highlight{% endif %}">
+      <div class="stat-num">{{ bad_meta_desc|length }}</div>
+      <div class="stat-label">Eksik Meta Description</div>
+    </div>
+    <div class="stat-card {% if bad_excerpt %}highlight{% endif %}">
+      <div class="stat-num">{{ bad_excerpt|length }}</div>
+      <div class="stat-label">Eksik Excerpt</div>
+    </div>
+  </div>
+</div>
+
+<div class="admin-card">
+  <h2>1️⃣ Adım: "None" string'lerini temizle (ücretsiz)</h2>
+  <p class="muted">
+    Bazı yazılarda <code>meta_title</code>, <code>excerpt</code> gibi alanlar
+    Python <code>None</code> yerine literal <strong>"None"</strong> string'i olarak kaydedilmiş.
+    Bu butona basınca tüm bu kötü değerler gerçek NULL'a çevrilir. AI çağrısı yapmaz, anlık biter.
+  </p>
+  <button id="normalizeBtn" class="btn btn-primary">🧹 Bozuk String'leri Temizle</button>
+  <div id="normalizeResult" class="muted small" style="margin-top:.5rem;"></div>
+</div>
+
+<div class="admin-card">
+  <h2>2️⃣ Adım: Eksik meta'ları AI ile doldur</h2>
+  <p class="muted">
+    Yukarıdaki temizliği yaptıktan sonra, hâlâ eksik olan
+    <code>meta_description</code> ve <code>excerpt</code> alanları için Claude AI'a
+    her yazının içeriğini gönderir, SEO uyumlu meta verisi üretir.<br>
+    <strong>Tahmini süre:</strong> Yazı başına ~5 saniye<br>
+    <strong>Tahmini maliyet:</strong> ~$0.01-0.02 / yazı (40 yazı için ~$0.50)
+  </p>
+  <button id="fillBtn" class="btn btn-primary">🤖 AI ile Eksik Meta'ları Doldur</button>
+  <div id="fillStatus" class="muted small" style="margin-top:.5rem;"></div>
+  <ul id="fillList" style="list-style:none; padding:0; margin-top:1rem; max-height:500px; overflow-y:auto; font-size:.875rem;"></ul>
+</div>
+
+{% if bad_meta_title or bad_excerpt or bad_meta_desc %}
+<div class="admin-card">
+  <h2>📝 Eksik Meta'ları Olan Yazılar</h2>
+  <table class="admin-table">
+    <thead><tr><th>Yazı</th><th>Dil</th><th>Eksikler</th><th></th></tr></thead>
+    <tbody>
+      {% set all_bad = (bad_meta_title + bad_meta_desc + bad_excerpt)|unique(attribute='id')|list %}
+      {% for t in all_bad %}
+      <tr>
+        <td>{{ t.title[:60] }}{% if t.title|length > 60 %}…{% endif %}</td>
+        <td><span class="badge">{{ t.language|upper }}</span></td>
+        <td>
+          {% if t in bad_meta_title %}<span class="badge badge-draft">title</span>{% endif %}
+          {% if t in bad_meta_desc %}<span class="badge badge-draft">desc</span>{% endif %}
+          {% if t in bad_excerpt %}<span class="badge badge-draft">excerpt</span>{% endif %}
+        </td>
+        <td><a href="{{ url_for('admin.post_edit', post_id=t.post_id, lang=t.language) }}" class="btn btn-sm">Düzenle</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<script>
+const CSRF = "{{ csrf_token() }}";
+
+document.getElementById('normalizeBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('normalizeBtn');
+  const out = document.getElementById('normalizeResult');
+  if (!confirm("Tüm yazıların 'None'/'null' string değerleri NULL'a çevrilsin mi?")) return;
+
+  btn.disabled = true;
+  out.textContent = '⏳ Temizleniyor…';
+  try {
+    const r = await fetch('{{ url_for("admin.seo_cleanup_normalize") }}', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json','X-CSRFToken': CSRF}
+    });
+    const data = await r.json();
+    if (data.error) throw new Error(data.error);
+    out.innerHTML = `<div class="flash flash-success">✓ ${data.fixed} yazıda bozuk değerler temizlendi.</div>`;
+    setTimeout(() => location.reload(), 2000);
+  } catch (e) {
+    out.innerHTML = `<div class="flash flash-error">${e.message}</div>`;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById('fillBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('fillBtn');
+  const status = document.getElementById('fillStatus');
+  const list = document.getElementById('fillList');
+  if (!confirm('Eksik meta\'ları olan tüm yazılar için AI çağrısı yapılsın mı? Bu birkaç dakika sürer ve API kredi tüketir.')) return;
+
+  btn.disabled = true;
+  status.textContent = '⏳ AI çalışıyor… (yazı başına ~5 sn)';
+  list.innerHTML = '';
+
+  try {
+    const r = await fetch('{{ url_for("admin.seo_cleanup_fill_missing") }}', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json','X-CSRFToken': CSRF}
+    });
+    const data = await r.json();
+    if (data.error) throw new Error(data.error);
+    status.innerHTML = `<div class="flash flash-success">✓ Bitti: ${data.success}/${data.total} başarılı, ${data.failed} hata.</div>`;
+    list.innerHTML = data.items.map(item => {
+      const icon = item.status === 'ok' ? '✅' : '❌';
+      const color = item.status === 'ok' ? '#16a34a' : '#dc2626';
+      return `<li style="padding:.4rem 0; border-bottom:1px solid #f0f2f5; color:${color}">${icon} <strong>${item.title}</strong> — <small>${item.updated || item.error || ''}</small></li>`;
+    }).join('');
+  } catch (e) {
+    status.innerHTML = `<div class="flash flash-error">${e.message}</div>`;
+  } finally {
+    btn.disabled = false;
+  }
+});
+</script>
+{% endblock %}

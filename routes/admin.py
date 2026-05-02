@@ -541,3 +541,119 @@ font-size:.9rem;margin-bottom:1rem}</style></head>
 </form>
 </div></body></html>
 """, key=key_val, error=error)
+
+
+# --- SEO Bakımı: Meta'ları temizle ve doldur -----------------------------
+
+@admin_bp.route("/seo-cleanup")
+@login_required
+def seo_cleanup_page():
+    """Eksik/bozuk meta verilerini gösteren ve toplu düzeltme yapan sayfa."""
+    # "None" string'i veya NULL meta_title olan yazılar
+    bad_meta_title = db.session.query(PostTranslation).filter(
+        db.or_(
+            PostTranslation.meta_title.is_(None),
+            db.func.lower(PostTranslation.meta_title).in_(["none", "null", ""]),
+        )
+    ).all()
+    bad_excerpt = db.session.query(PostTranslation).filter(
+        db.or_(
+            PostTranslation.excerpt.is_(None),
+            db.func.lower(PostTranslation.excerpt).in_(["none", "null", ""]),
+        )
+    ).all()
+    bad_meta_desc = db.session.query(PostTranslation).filter(
+        db.or_(
+            PostTranslation.meta_description.is_(None),
+            db.func.lower(PostTranslation.meta_description).in_(["none", "null", ""]),
+        )
+    ).all()
+    return render_template(
+        "admin/seo_cleanup.html",
+        bad_meta_title=bad_meta_title,
+        bad_excerpt=bad_excerpt,
+        bad_meta_desc=bad_meta_desc,
+    )
+
+
+@admin_bp.route("/seo-cleanup/normalize", methods=["POST"])
+@login_required
+@limiter.limit("10 per hour")
+def seo_cleanup_normalize():
+    """'None'/'null' string'lerini gerçek NULL'a çevirir (AI çağırmaz, ücretsiz)."""
+    fixed = 0
+    bad_values = ["none", "null", "undefined", "nan", ""]
+    for t in db.session.query(PostTranslation).all():
+        changed = False
+        for field in ("meta_title", "meta_description", "excerpt", "meta_keywords"):
+            v = getattr(t, field, None)
+            if v is None:
+                continue
+            if str(v).strip().lower() in bad_values:
+                setattr(t, field, None)
+                changed = True
+        if changed:
+            fixed += 1
+    db.session.commit()
+    return jsonify({"ok": True, "fixed": fixed})
+
+
+@admin_bp.route("/seo-cleanup/fill-missing", methods=["POST"])
+@login_required
+@limiter.limit("3 per hour")
+def seo_cleanup_fill_missing():
+    """
+    Meta_description ve excerpt'i eksik olan yazılar için AI ile doldurur.
+    Tek tek SEO endpoint'ine ihtiyaç bırakmadan toplu çalışır.
+    """
+    from services.seo import SEOGenerator
+
+    seo = SEOGenerator(
+        api_key=current_app.config["ANTHROPIC_API_KEY"],
+        model=current_app.config["AI_MODEL"],
+    )
+
+    # Yayında olan TR çevirileri içinde meta'sı eksik olanlar
+    missing = db.session.query(PostTranslation).filter(
+        PostTranslation.is_published == True,  # noqa: E712
+        PostTranslation.language == "tr",
+        db.or_(
+            PostTranslation.meta_description.is_(None),
+            db.func.length(db.func.coalesce(PostTranslation.meta_description, "")) < 50,
+            PostTranslation.excerpt.is_(None),
+            db.func.length(db.func.coalesce(PostTranslation.excerpt, "")) < 30,
+        ),
+    ).all()
+
+    results = {"total": len(missing), "success": 0, "failed": 0, "items": []}
+
+    for t in missing:
+        try:
+            data = seo.generate(title=t.title, content=t.content or "", lang="tr")
+            updated = []
+            if not t.meta_title or len(t.meta_title) < 10:
+                t.meta_title = (data.get("meta_title") or "")[:255]
+                updated.append("meta_title")
+            if not t.meta_description or len(t.meta_description) < 50:
+                t.meta_description = (data.get("meta_description") or "")[:500]
+                updated.append("meta_desc")
+            if not t.excerpt or len(t.excerpt) < 30:
+                # Excerpt için meta_description'ın kısa hâlini kullan
+                t.excerpt = (data.get("meta_description") or data.get("structured_summary") or "")[:300]
+                updated.append("excerpt")
+            if not t.meta_keywords:
+                t.meta_keywords = (data.get("meta_keywords") or "")[:500]
+                updated.append("keywords")
+            db.session.commit()
+            results["success"] += 1
+            results["items"].append({
+                "status": "ok",
+                "title": t.title,
+                "updated": ", ".join(updated) or "(zaten doluydu)",
+            })
+        except Exception as e:
+            db.session.rollback()
+            results["failed"] += 1
+            results["items"].append({"status": "error", "title": t.title, "error": str(e)[:120]})
+
+    return jsonify(results)

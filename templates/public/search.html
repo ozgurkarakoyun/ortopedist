@@ -26,7 +26,8 @@
               <h3 class="post-card-title">
                 <a href="{% if current_lang == 'tr' %}{{ url_for('public.post_tr', slug=post.slug) }}{% else %}{{ url_for('public.post_' + current_lang, slug=post.slug) }}{% endif %}">{{ t.title }}</a>
               </h3>
-              {% if t.excerpt %}<p class="post-card-excerpt">{{ t.excerpt }}</p>{% endif %}
+              {% set safe_excerpt = t|smart_description %}
+              {% if safe_excerpt %}<p class="post-card-excerpt">{{ safe_excerpt }}</p>{% endif %}
             </div>
           </article>
           {% endif %}

@@ -90,8 +90,9 @@ class TopicFinder:
         # Tüm text bloklarını birleştir
         text = ""
         for block in response.content:
-            if hasattr(block, "text"):
-                text += block.text + "\n"
+            block_text = getattr(block, "text", None)
+            if block_text:  # None ve "" değilse
+                text += block_text + "\n"
 
         data = _extract_json(text)
         if not data or "topics" not in data:

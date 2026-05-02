@@ -1,51 +1,52 @@
-# SEO Bakımı Timeout Düzeltmesi (v2)
+# AI Servisleri NoneType Düzeltmesi
 
 ## Sorun
 
-İlk patch'te "AI ile Eksik Meta'ları Doldur" butonu **40 yazıyı tek istekte** işliyordu:
-- Backend: 3-4 dakika boyunca AI çağırıyor
-- Frontend: 60 saniye sonra Railway proxy timeout
-- JS: boş response alıp "JSON.parse: unexpected character" hatası
+"AI Konu Keşfet" butonu hata veriyordu:
+`unsupported operand type(s) for +: 'NoneType' and 'str'`
 
-## Çözüm
+Sebep: Anthropic API'sinin web search tool'u veya bazı yanıt türleri,
+`block.text` alanı olan ama içi `None` olan blok döndürüyor.
+Eski kod `block.text + "string"` yapıyordu → patlıyor.
 
-Endpoint **tekli** çalışacak şekilde bölündü:
-- `/admin/seo-cleanup/missing-list` (GET): eksik yazıların listesini döner
-- `/admin/seo-cleanup/fill-one/<id>` (POST): tek bir yazıyı işler (~3-5 sn)
+Aynı bug 6 servisde tekrar ediyordu — hepsi düzeltildi.
 
-JS yazıları **sırayla** çağırır, her biri için anlık ✅/❌ gösterir.
-İlerleme: "İşleniyor: 17 / 40 — Yazı başlığı" gibi.
+## Düzeltme
 
-## Değişen 2 dosya
+`b.text` None olduğunda boş string olarak kabul edilir:
+- `b.text or ""` ile fallback
+- `getattr(block, "text", None)` ile güvenli erişim
+
+## Değişen 6 dosya
 
 ```
-routes/admin.py                     (3 endpoint - missing-list, fill-one, fill-missing deprecated)
-templates/admin/seo_cleanup.html    (yeni JS - sıralı işleme)
+services/topic_finder.py          (Konu Keşfet özelliği — asıl bug burada)
+services/ai_writer.py              (AI yazı yazma)
+services/enhancer.py               (Yazı geliştirme)
+services/translator.py             (TR→EN/AR çeviri)
+services/seo.py                    (SEO meta üretimi)
+services/image_generator.py        (Kapak görseli prompt'u)
 ```
 
 ## Kurulum
 
 ```bash
 cd /yol/to/ortopedist
-unzip ~/Downloads/seo-fix-v2.zip -d /tmp/
+unzip ~/Downloads/none-fix-patch.zip -d /tmp/
 
-cp /tmp/seo-fix-v2/routes/admin.py routes/admin.py
-cp /tmp/seo-fix-v2/templates/admin/seo_cleanup.html templates/admin/seo_cleanup.html
+cp /tmp/none-fix-patch/services/*.py services/
 
-git add routes/admin.py templates/admin/seo_cleanup.html
-git commit -m "fix: SEO bakım butonu timeout sorununu çöz - tek tek işle"
+git add services/
+git commit -m "fix: NoneType handling in all AI services"
 git push
 ```
 
 Railway redeploy bekle (~1-2 dk).
 
-## Kullanım
+## Test
 
-Admin → 🔧 SEO Bakımı → "🤖 AI ile Eksik Meta'ları Doldur":
-- Önce kaç yazı eksik bulduğunu söyler
-- Sırayla her yazı için API çağrısı (~3-5 sn / yazı)
-- Her yazıdan sonra ✅ veya ❌ ile sonuç görünür
-- Tarayıcı sekmeyi açık bırak, kapama
+Admin → AI Konu Keşfet butonu → çalışmalı
+Admin → Bir yazıyı düzenle → AI Geliştir → çalışmalı
+Admin → Çevir (EN/AR) → çalışmalı
 
-40 yazı için tahmini süre: 3-4 dakika
-40 yazı için tahmini maliyet: ~$0.50
+Sonuçta tüm AI özellikleri artık None text bloklarına karşı dayanıklı.

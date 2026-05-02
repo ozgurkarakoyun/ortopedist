@@ -43,7 +43,7 @@ class SEOGenerator:
             system=system,
             messages=[{"role": "user", "content": user}],
         )
-        text = "".join([b.text for b in response.content if hasattr(b, "text")])
+        text = "".join([(b.text or "") for b in response.content if hasattr(b, "text")])
         data = _extract_json(text) or {}
         data["input_tokens"] = response.usage.input_tokens
         data["output_tokens"] = response.usage.output_tokens

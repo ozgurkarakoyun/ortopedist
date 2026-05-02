@@ -75,7 +75,7 @@ class Translator:
             system=system,
             messages=[{"role": "user", "content": user}],
         )
-        text = "".join([b.text for b in response.content if hasattr(b, "text")])
+        text = "".join([(b.text or "") for b in response.content if hasattr(b, "text")])
         data = _extract_json(text)
         if not data:
             raise ValueError("Çeviri yanıtı çözülemedi")

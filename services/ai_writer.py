@@ -130,7 +130,7 @@ class AIWriter:
             messages=[{"role": "user", "content": user_prompt}],
         )
 
-        text = "".join([b.text for b in response.content if hasattr(b, "text")])
+        text = "".join([(b.text or "") for b in response.content if hasattr(b, "text")])
         data = _extract_json(text)
         if not data:
             raise ValueError("AI geçerli JSON döndürmedi")
@@ -173,7 +173,7 @@ class AIWriter:
             system=system_prompt,
             messages=[{"role": "user", "content": user_prompt}],
         )
-        text = "".join([b.text for b in response.content if hasattr(b, "text")])
+        text = "".join([(b.text or "") for b in response.content if hasattr(b, "text")])
         data = _extract_json(text) or {"suggestions": []}
         return {
             "suggestions": data.get("suggestions", []),

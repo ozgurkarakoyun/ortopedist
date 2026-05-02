@@ -95,7 +95,7 @@ class ImageGenerator:
             system=system,
             messages=[{"role": "user", "content": user}],
         )
-        crafted = "".join(b.text for b in r.content if hasattr(b, "text")).strip()
+        crafted = "".join((b.text or "") for b in r.content if hasattr(b, "text")).strip()
         # Style hint'i ekle (bütünleşik tarz için)
         return f"{crafted}\n\nStyle requirements: {SAFE_STYLE_HINT}"
 
